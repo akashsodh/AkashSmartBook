@@ -1,6 +1,6 @@
 // sw.js का सही कोड
 
-const CACHE_NAME = 'mock-test-v4'; // वर्जन को v2 से v3 कर दिया गया है
+const CACHE_NAME = 'mock-test-v5'; // वर्जन को v2 से v3 कर दिया गया है
 
 // कैश करने के लिए आवश्यक फाइलें
 const urlsToCache = [
