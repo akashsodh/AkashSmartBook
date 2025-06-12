@@ -1,7 +1,7 @@
 {
   "name": "Akash Smartbook Mock Test",
-  "short_name": "MockTest",
-  "start_url": "/index.html",
+  "short_name": "Akash SmartBook",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#667eea",
