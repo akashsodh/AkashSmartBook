@@ -727,3 +727,8 @@ body {
     padding: 20px;
   }
 }
+
+/* फॉर्म को छिपाने के लिए हेल्पर क्लास */
+.hidden {
+  display: none;
+}
