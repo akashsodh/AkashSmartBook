@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mock-test-v1';
+const CACHE_NAME = 'mock-test-v2';
 
 // कैश करने के लिए आवश्यक फाइलें
 const urlsToCache = [
