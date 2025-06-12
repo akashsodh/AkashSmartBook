@@ -52,16 +52,14 @@
     </div>
     <div id="completion-message" style="margin-top: 20px; text-align: center; font-size: 20px; font-weight: bold;"></div>
   </div>
-<script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 
-alert("टेस्ट पेज का जावास्क्रिप्ट चल रहा है!"); // <-- यह नई लाइन डालें
-   try {
-      console.log(auth); // हम जांच रहे हैं कि 'auth' ऑब्जेक्ट मौजूद है या नहीं
-      alert('फायरबेस ऑब्जेक्ट लोड हो गया है'); // क्या यह दूसरा अलर्ट आता है?
-    } catch (e) {
-      alert('एक एरर आया: ' + e.message); // अगर एरर है तो यह अलर्ट आएगा
-   }
-  // ===== ग्लोबल वेरिएबल्स =====
+<script src="script.js"></script>
+
+<script>
+    // ===== ग्लोबल वेरिएबल्स =====
     let originalQuestions = []; 
     let questions = []; 
     let bookmarkedQuestions = []; 
@@ -241,203 +239,39 @@ alert("टेस्ट पेज का जावास्क्रिप्ट 
       updateScoreSummary();
       saveQuizStateToFirebase();
     }
-
-    function nextQuestion() {
-      if (current < questions.length - 1) { loadQuestion(current + 1); saveQuizStateToFirebase(); }
-    }
-
-    function prevQuestion() {
-      if (current > 0) { loadQuestion(current - 1); saveQuizStateToFirebase(); }
-    }
-
-    function toggleBookmark(shuffledQuestionIndex) {
-      const originalQuestionIndex = originalQuestions.indexOf(questions[shuffledQuestionIndex]);
-      const bookmarkIndex = bookmarkedQuestions.indexOf(originalQuestionIndex);
-      if (bookmarkIndex > -1) { bookmarkedQuestions.splice(bookmarkIndex, 1); } else { bookmarkedQuestions.push(originalQuestionIndex); }
-      localStorage.setItem(UNIT_ID + "_bookmarkedQuestions", JSON.stringify(bookmarkedQuestions));
-      updateSidebarHighlight(); 
-      updateBookmarkButton();
-      saveQuizStateToFirebase();
-    }
-
+    
+    function nextQuestion() { if (current < questions.length - 1) { loadQuestion(current + 1); saveQuizStateToFirebase(); } }
+    function prevQuestion() { if (current > 0) { loadQuestion(current - 1); saveQuizStateToFirebase(); } }
+    function toggleBookmark(shuffledQuestionIndex) { const originalQuestionIndex = originalQuestions.indexOf(questions[shuffledQuestionIndex]); const bookmarkIndex = bookmarkedQuestions.indexOf(originalQuestionIndex); if (bookmarkIndex > -1) { bookmarkedQuestions.splice(bookmarkIndex, 1); } else { bookmarkedQuestions.push(originalQuestionIndex); } localStorage.setItem(UNIT_ID + "_bookmarkedQuestions", JSON.stringify(bookmarkedQuestions)); updateSidebarHighlight(); updateBookmarkButton(); saveQuizStateToFirebase(); }
     function startTimer() { if (timerInterval) clearInterval(timerInterval); currentQuestionStartTime = Date.now(); timerInterval = setInterval(() => { const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000); document.getElementById("time-tracking").innerText = `समय: ${elapsed} सेकंड`; }, 1000); }
-    
     function stopTimer() { if (timerInterval) clearInterval(timerInterval); const currentOriginalQuestionIndex = originalQuestions.indexOf(questions[current]); const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000); questionTimes[currentOriginalQuestionIndex] = (questionTimes[currentOriginalQuestionIndex] || 0) + elapsed; localStorage.setItem(UNIT_ID + "_questionTimes", JSON.stringify(questionTimes)); }
-
-    function submitQuiz() {
-      score = 0;
-      questions.forEach((q, i) => {
-        const originalQuestionIndex = originalQuestions.indexOf(q);
-        if (answers[originalQuestionIndex] !== undefined && answers[originalQuestionIndex] == q.answer) {
-          score++;
-        }
-      });
-      const percentage = ((score / questions.length) * 100).toFixed(2);
-      document.getElementById("result").innerHTML = `आपका स्कोर: ${score}/${questions.length} (${percentage}%)`;
-      const user = auth.currentUser;
-      if (user) {
-        db.collection('users').doc(user.uid).collection('scores').add({
-          unitId: UNIT_ID,
-          score: score,
-          totalQuestions: questions.length,
-          timestamp: new Date()
-        });
-      }
-      alert("आपका परीक्षा परिणाम सफलतापूर्वक सहेज लिया गया है!");
-    }
-
-    function reviewQuiz() {
-        let reviewHTML = `<html><head><meta charset='UTF-8'><title>Quiz Review</title><style>body{font-family:'Poppins',sans-serif;padding:20px;} h2{color:#185a9d;} .correct{color:green;} .incorrect{color:red;}</style></head><body><h2>Quiz Review</h2>`;
-        originalQuestions.forEach((q, originalIndex) => { 
-            const userAnsOriginalOptionIdx = answers[originalIndex]; 
-            reviewHTML += `<div><strong>Q${originalIndex + 1}:</strong> ${q.question}<br>`; 
-            if (userAnsOriginalOptionIdx !== undefined) {
-                reviewHTML += `<span>Your Answer: <span class="${userAnsOriginalOptionIdx === q.answer ? 'correct' : 'incorrect'}">${q.options[userAnsOriginalOptionIdx]}</span></span><br>`;
-            }
-            reviewHTML += `<span class="correct">Correct Answer: ${q.options[q.answer]}</span></div><hr>`;
-        });
-        reviewHTML += `</body></html>`;
-        const newWin = window.open();
-        newWin.document.write(reviewHTML);
-        newWin.document.close();
-    }
-
-    function updateProgress() {
-      const total = questions.length;
-      let answeredCount = 0;
-      questions.forEach(q => {
-        const originalIndex = originalQuestions.indexOf(q);
-        if (answers[originalIndex] !== undefined) {
-          answeredCount++;
-        }
-      });
-      const percentage = total > 0 ? (answeredCount / total) * 100 : 0;
-      document.getElementById("progressBarFill").style.width = percentage + "%";
-      document.getElementById("progressBarText").innerText = `${answeredCount}/${total} (${percentage.toFixed(0)}%)`;
-    }
-
-    function updateSidebarHighlight() {
-      const allLinks = document.querySelectorAll("#questionTable a");
-      allLinks.forEach((link, sidebarLinkIndex) => {
-        link.classList.remove("correct", "incorrect", "active", "unanswered", "bookmarked");
-        const originalQuestionIndex = originalQuestions.indexOf(questions[sidebarLinkIndex]);
-        if (sidebarLinkIndex === current) {
-          link.classList.add("active");
-        } else {
-          if (answers[originalQuestionIndex] !== undefined) {
-            link.classList.add(answers[originalQuestionIndex] == questions[sidebarLinkIndex].answer ? "correct" : "incorrect");
-          } else {
-            link.classList.add("unanswered");
-          }
-        }
-        if (bookmarkedQuestions.includes(originalQuestionIndex)) {
-          link.classList.add("bookmarked");
-        }
-      });
-    }
-
-    function buildSidebarLinks() {
-      const table = document.getElementById("questionTable");
-      table.innerHTML = "";
-      for (let i = 0; i < questions.length; i += 5) {
-        const row = document.createElement("tr");
-        for (let j = i; j < i + 5 && j < questions.length; j++) {
-          const cell = document.createElement("td");
-          const a = document.createElement("a");
-          a.href = "#";
-          a.textContent = `${j + 1}`;
-          a.onclick = ((shuffledIndex) => () => { loadQuestion(shuffledIndex); return false; })(j);
-          cell.appendChild(a);
-          row.appendChild(cell);
-        }
-        table.appendChild(row);
-      }
-    }
-
-    function clearSavedData() {
-      if (confirm("क्या आप वाकई सभी सहेजी गई प्रगति को हटाना चाहते हैं?")) {
-        localStorage.clear();
-        const user = auth.currentUser;
-        if(user) {
-          db.collection('users').doc(user.uid).collection('quizState').doc(UNIT_ID).delete()
-            .then(() => alert("फायरबेस डेटा भी हटा दिया गया है।"))
-            .catch(e => console.error("फायरबेस डेटा हटाने में त्रुटि", e));
-        }
-        window.location.reload();
-      }
-    }
-
-    function toggleSidebar() {
-      const sidebar = document.getElementById("sidebar");
-      sidebar.classList.toggle("hidden");
-      document.body.classList.toggle("sidebar-visible");
-      document.body.style.paddingLeft = sidebar.classList.contains("hidden") ? "20px" : (document.body.clientWidth > 768 ? "240px" : "220px");
-    }
-
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else if (document.exitFullscreen) document.exitFullscreen();
-    }
-
-    function toggleTheme() {
-      document.body.classList.toggle("dark");
-      localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
-      const themeBtn = document.getElementById("theme-btn");
-      themeBtn.innerHTML = document.body.classList.contains("dark") ? `<i class="fas fa-moon"></i> Light Theme` : `<i class="fas fa-sun"></i> Dark Theme`;
-    }
-
-    function changeFontSize(change) {
-      if (change === 0) currentFontSize = 20;
-      else currentFontSize += change;
-      if (currentFontSize < 14) currentFontSize = 14;
-      if (currentFontSize > 30) currentFontSize = 30;
-      localStorage.setItem(UNIT_ID + "_quizFontSize", currentFontSize);
-      applyFontSize();
-    }
-
-    function applyFontSize() {
-      const questionElement = document.getElementById("current-question-text");
-      if (questionElement) questionElement.style.fontSize = currentFontSize + "px";
-      document.querySelectorAll("#quiz-content label").forEach(label => {
-        label.style.fontSize = (currentFontSize * 0.9) + "px";
-      });
-      const explanationElement = document.getElementById("explanation-text");
-      if (explanationElement) explanationElement.style.fontSize = (currentFontSize * 0.85) + "px";
-    }
-
-    function setInitialIcons() {
-      const theme = localStorage.getItem("theme");
-      if (theme === "dark") toggleTheme();
-      handleFullscreenChange();
-      document.addEventListener('fullscreenchange', handleFullscreenChange);
-    }
-    
-    function handleFullscreenChange() {
-        const fullscreenBtn = document.getElementById("fullscreen-btn");
-        fullscreenBtn.innerHTML = document.fullscreenElement ? `<i class="fas fa-compress"></i> Exit Fullscreen` : `<i class="fas fa-expand"></i> Toggle Fullscreen`;
-    }
-    
+    function submitQuiz() { score = 0; questions.forEach((q, i) => { const originalQuestionIndex = originalQuestions.indexOf(q); if (answers[originalQuestionIndex] !== undefined && answers[originalQuestionIndex] == q.answer) { score++; } }); const percentage = ((score / questions.length) * 100).toFixed(2); document.getElementById("result").innerHTML = `आपका स्कोर: ${score}/${questions.length} (${percentage}%)`; const user = auth.currentUser; if (user) { db.collection('users').doc(user.uid).collection('scores').add({ unitId: UNIT_ID, score: score, totalQuestions: questions.length, timestamp: new Date() }); } alert("आपका परीक्षा परिणाम सफलतापूर्वक सहेज लिया गया है!"); }
+    function reviewQuiz() { let reviewHTML = `<html>...</html>`; const newWin = window.open(); newWin.document.write(reviewHTML); newWin.document.close(); }
+    function updateProgress() { const total = questions.length; let answeredCount = 0; questions.forEach(q => { const originalIndex = originalQuestions.indexOf(q); if (answers[originalIndex] !== undefined) { answeredCount++; } }); const percentage = total > 0 ? (answeredCount / total) * 100 : 0; document.getElementById("progressBarFill").style.width = percentage + "%"; document.getElementById("progressBarText").innerText = `${answeredCount}/${total} (${percentage.toFixed(0)}%)`; }
+    function updateSidebarHighlight() { const allLinks = document.querySelectorAll("#questionTable a"); allLinks.forEach((link, sidebarLinkIndex) => { link.classList.remove("correct", "incorrect", "active", "unanswered", "bookmarked"); const originalQuestionIndex = originalQuestions.indexOf(questions[sidebarLinkIndex]); if (sidebarLinkIndex === current) { link.classList.add("active"); } else { if (answers[originalQuestionIndex] !== undefined) { link.classList.add(answers[originalQuestionIndex] == questions[sidebarLinkIndex].answer ? "correct" : "incorrect"); } else { link.classList.add("unanswered"); } } if (bookmarkedQuestions.includes(originalQuestionIndex)) { link.classList.add("bookmarked"); } }); }
+    function buildSidebarLinks() { const table = document.getElementById("questionTable"); table.innerHTML = ""; for (let i = 0; i < questions.length; i += 5) { const row = document.createElement("tr"); for (let j = i; j < i + 5 && j < questions.length; j++) { const cell = document.createElement("td"); const a = document.createElement("a"); a.href = "#"; a.textContent = `${j + 1}`; a.onclick = ((shuffledIndex) => () => { loadQuestion(shuffledIndex); return false; })(j); cell.appendChild(a); row.appendChild(cell); } table.appendChild(row); } }
+    function clearSavedData() { if (confirm("क्या आप वाकई सभी सहेजी गई प्रगति को हटाना चाहते हैं?")) { localStorage.clear(); const user = auth.currentUser; if(user) { db.collection('users').doc(user.uid).collection('quizState').doc(UNIT_ID).delete().then(() => alert("फायरबेस डेटा भी हटा दिया गया है।")); } window.location.reload(); } }
+    function toggleSidebar() { const sidebar = document.getElementById("sidebar"); sidebar.classList.toggle("hidden"); document.body.classList.toggle("sidebar-visible"); document.body.style.paddingLeft = sidebar.classList.contains("hidden") ? "20px" : (document.body.clientWidth > 768 ? "240px" : "220px"); }
+    function toggleFullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); }
+    function toggleTheme() { document.body.classList.toggle("dark"); localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light"); const themeBtn = document.getElementById("theme-btn"); themeBtn.innerHTML = document.body.classList.contains("dark") ? `<i class="fas fa-moon"></i> Light Theme` : `<i class="fas fa-sun"></i> Dark Theme`; }
+    function changeFontSize(change) { if (change === 0) currentFontSize = 20; else currentFontSize += change; if (currentFontSize < 14) currentFontSize = 14; if (currentFontSize > 30) currentFontSize = 30; localStorage.setItem(UNIT_ID + "_quizFontSize", currentFontSize); applyFontSize(); }
+    function applyFontSize() { const questionElement = document.getElementById("current-question-text"); if (questionElement) questionElement.style.fontSize = currentFontSize + "px"; document.querySelectorAll("#quiz-content label").forEach(label => { label.style.fontSize = (currentFontSize * 0.9) + "px"; }); const explanationElement = document.getElementById("explanation-text"); if (explanationElement) explanationElement.style.fontSize = (currentFontSize * 0.85) + "px"; }
+    function setInitialIcons() { const theme = localStorage.getItem("theme"); if (theme === "dark") { document.body.classList.add("dark"); document.getElementById("theme-btn").innerHTML = `<i class="fas fa-moon"></i> Light Theme`; } handleFullscreenChange(); document.addEventListener('fullscreenchange', handleFullscreenChange); }
+    function handleFullscreenChange() { const fullscreenBtn = document.getElementById("fullscreen-btn"); fullscreenBtn.innerHTML = document.fullscreenElement ? `<i class="fas fa-compress"></i> Exit Fullscreen` : `<i class="fas fa-expand"></i> Toggle Fullscreen`; }
     function shuffleArray(array) { const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
-    
-    function shuffleQuestions() { shuffledQuestionsOrder = shuffleArray(Array.from({length: originalQuestions.length}, (_, i) => i)); localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); questions = shuffledQuestionsOrder.map(index => originalQuestions[index]); buildSidebarLinks(); loadQuestion(0); updateScoreSummary(); updateProgress(); alert("Questions shuffled."); }
-    
-    function resetQuestionOrder() { questions = [...originalQuestions]; shuffledQuestionsOrder = null; localStorage.removeItem(UNIT_ID + "_shuffledQuestionsOrder"); buildSidebarLinks(); loadQuestion(0); updateScoreSummary(); updateProgress(); alert("Question order reset."); }
-    
+    function shuffleQuestions() { shuffledQuestionsOrder = shuffleArray(Array.from({length: originalQuestions.length}, (_, i) => i)); localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); questions = shuffledQuestionsOrder.map(index => originalQuestions[index]); buildSidebarLinks(); loadQuestion(0); alert("Questions shuffled."); }
+    function resetQuestionOrder() { questions = [...originalQuestions]; shuffledQuestionsOrder = null; localStorage.removeItem(UNIT_ID + "_shuffledQuestionsOrder"); buildSidebarLinks(); loadQuestion(0); alert("Question order reset."); }
     function shuffleOptions() { shuffledOptionsOrder = {}; originalQuestions.forEach((q, originalIndex) => { shuffledOptionsOrder[originalIndex] = shuffleArray(Array.from({length: q.options.length}, (_, j) => j)); }); localStorage.setItem(UNIT_ID + "_shuffledOptionsOrder", JSON.stringify(shuffledOptionsOrder)); loadQuestion(current); }
-    
     function updateScoreSummary() { let correct = 0, wrong = 0; originalQuestions.forEach((q, i) => { if (answers[i] !== undefined) { if (answers[i] === q.answer) correct++; else wrong++; } }); document.getElementById("score-summary").innerText = `सही उत्तर: ${correct} | गलत उत्तर: ${wrong}`; }
-    
     function updateBookmarkButton() { const icon = document.getElementById('bookmarkBtn').querySelector('i'); const originalQuestionIndex = originalQuestions.indexOf(questions[current]); if (bookmarkedQuestions.includes(originalQuestionIndex)) { icon.classList.replace('far', 'fas'); } else { icon.classList.replace('fas', 'far'); } }
-    
-    function showBookmarkedQuestions() { if (bookmarkedQuestions.length === 0) { alert("No questions bookmarked."); return; } questions = bookmarkedQuestions.map(index => originalQuestions[index]); shuffledQuestionsOrder = bookmarkedQuestions; localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); alert(`Showing ${questions.length} bookmarked questions.`); loadQuestion(0); buildSidebarLinks(); updateScoreSummary(); updateProgress(); }
-    
+    function showBookmarkedQuestions() { if (bookmarkedQuestions.length === 0) { alert("No questions bookmarked."); return; } questions = bookmarkedQuestions.map(index => originalQuestions[index]); shuffledQuestionsOrder = bookmarkedQuestions; localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); loadQuestion(0); buildSidebarLinks(); }
     document.addEventListener('keydown', (event) => { if (event.key === "ArrowRight") nextQuestion(); else if (event.key === "ArrowLeft") prevQuestion(); });
-    
-    document.addEventListener('click', function(event) { const sidebar = document.getElementById('sidebar'); const toggleBtn = document.querySelector('.toggle-btn'); if (!sidebar.classList.contains('hidden') && !sidebar.contains(event.target) && !toggleBtn.contains(event.target)) { toggleSidebar(); } });
+    document.addEventListener('click', function(event) { const sidebar = document.getElementById('sidebar'); const toggleBtn = document.querySelector('.toggle-btn'); if (sidebar && !sidebar.classList.contains('hidden') && !sidebar.contains(event.target) && toggleBtn && !toggleBtn.contains(event.target)) { toggleSidebar(); } });
 
     // ===== नया एंट्री पॉइंट =====
     document.addEventListener('DOMContentLoaded', (event) => {
         document.querySelector('.quiz-container').style.display = 'none';
+        // यूज़र के लॉगिन स्टेटस का इंतज़ार करें
         auth.onAuthStateChanged(user => {
             console.log("Firebase Auth state is ready. Starting quiz load.");
             setInitialIcons();
