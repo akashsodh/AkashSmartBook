@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courses</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div class="quiz-container" style="margin-top: 50px;">
+    <div id="user-info" style="text-align: right; margin-bottom: 20px;"></div>
+    <h1>एक कोर्स चुनें</h1>
+    <div id="courses-list">
+        <a href="test.html" class="button" style="display:block; text-align:center; margin-bottom:15px; text-decoration:none;">Rajasthan History Test</a>
+        </div>
+    <button id="logout-btn" style="width: 100%; background: #e74c3c; margin-top: 20px;">लॉगआउट करें</button>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+  <script src="script.js"></script>
+
+  <script>
+    const userInfoDiv = document.getElementById('user-info');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    // जांचें कि यूजर लॉग इन है या नहीं (Auth Guard)
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // यूजर लॉग इन है
+            userInfoDiv.innerHTML = `स्वागत है, <strong>${user.displayName || user.email}</strong>`;
+        } else {
+            // यूजर लॉग इन नहीं है, उसे लॉगिन पेज पर भेजें
+            window.location.href = 'index.html';
+        }
+    });
+
+    // लॉगआउट
+    logoutBtn.addEventListener('click', () => {
+        auth.signOut().then(() => {
+            console.log('User signed out.');
+            window.location.href = 'index.html';
+        });
+    });
+  </script>
+</body>
+</html>
