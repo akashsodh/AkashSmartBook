@@ -115,10 +115,13 @@
             updateProgress();
             applyFontSize();
         } catch (error) {
-            console.error('Failed to load questions:', error);
-            document.getElementById('quiz-content').innerHTML = `<p style="color:red;">प्रश्नों को लोड करने में त्रुटि हुई।</p>`;
-        }
-    }
+    console.error('असली एरर यह है:', error); // कंसोल में असली एरर दिखाएगा
+    
+    // अब असली एरर को स्क्रीन पर अलर्ट में दिखाएं
+    alert("असली एरर मिला:\n\n" + error.toString());
+
+    document.getElementById('quiz-content').innerHTML = `<p style="color:red;">प्रश्नों को लोड करने में एक त्रुटि हुई। कृपया अलर्ट में दिए गए मैसेज को देखें।</p>`;
+}
 
     function loadQuestion(index) {
         if (index < 0 || index >= questions.length) return;
@@ -157,7 +160,6 @@
         updateBookmarkButton();
         startTimer();
     }
-
     function selectAnswer(selectedOriginalOptionIndex) {
         const originalQuestionIndex = originalQuestions.indexOf(questions[current]);
         if (answers[originalQuestionIndex] !== undefined) return;
