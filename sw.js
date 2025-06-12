@@ -1,14 +1,18 @@
-const CACHE_NAME = 'mock-test-v2';
+// sw.js का सही कोड
+
+const CACHE_NAME = 'mock-test-v3'; // वर्जन को v2 से v3 कर दिया गया है
 
 // कैश करने के लिए आवश्यक फाइलें
 const urlsToCache = [
   '/',
   'index.html',
   'courses.html',
-  'test.html',
+  'test.html',      // <-- यह महत्वपूर्ण लाइन जोड़ी गई है
   'style.css',
   'script.js',
   'questions.json',
+  '/icons/icon-192.png', // आइकन को भी कैश कर लेते हैं
+  '/icons/icon-512.png', // आइकन को भी कैश कर लेते हैं
   'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
