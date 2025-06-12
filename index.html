@@ -76,9 +76,10 @@
       errorMessage.innerText = '';
     });
     
-    // ===== लॉगिन लॉजिक (पहले जैसा ही) =====
+    // ===== लॉगिन लॉजिक =====
     auth.onAuthStateChanged(user => {
         if (user) {
+            console.log("User is already signed in, redirecting...");
             window.location.href = 'courses.html';
         }
     });
@@ -106,9 +107,41 @@
                     photoURL: user.photoURL
                 }, { merge: true });
             })
-            .catch(error => errorMessage.innerText = "Google लॉगिन विफल: " + error.message);
+            .catch(error => errorMessage.innerText = "Google लॉगिन विफल: " + error.code + " | " + error.message);
     });
 
-    // ===== नया साइन अप लॉजिक =====
+    // ===== साइन अप लॉजिक =====
     signupBtn.addEventListener('click', () => {
-      const name = document.getElementById
+      const name = document.getElementById('signup-name').value;
+      const email = document.getElementById('signup-email').value;
+      const password = document.getElementById('signup-password').value;
+
+      if (!name || !email || !password) {
+        errorMessage.innerText = "कृपया सभी फ़ील्ड भरें।";
+        return;
+      }
+      if (password.length < 6) {
+        errorMessage.innerText = "पासवर्ड कम से कम 6 अक्षर का होना चाहिए।";
+        return;
+      }
+
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          const user = userCredential.user;
+          return user.updateProfile({
+            displayName: name
+          }).then(() => {
+            return db.collection('users').doc(user.uid).set({
+              name: name,
+              email: email
+            });
+          });
+        })
+        .catch(error => {
+          errorMessage.innerText = "साइन अप विफल: " + error.message;
+        });
+    });
+
+  </script>
+</body>
+</html>
