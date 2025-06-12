@@ -732,3 +732,41 @@ body {
 .hidden {
   display: none;
 }
+
+/* ===== पासवर्ड मैनेजमेंट सेक्शन के लिए नया CSS ===== */
+
+.modal-content input[type="password"],
+.modal-content input[type="text"] {
+    width: 95%;
+    padding: 10px;
+    margin-top: 5px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+.modal-content label {
+  font-weight: bold;
+  font-size: 14px;
+  color: #555;
+  background: none;
+  padding: 0;
+  margin: 0;
+  pointer-events: auto;
+}
+
+.password-feedback {
+    text-align: center;
+    margin-top: 10px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.password-feedback.error {
+    color: #e74c3c; /* लाल */
+}
+
+.password-feedback.success {
+    color: #2ecc71; /* हरा */
+}
