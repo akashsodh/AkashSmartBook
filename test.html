@@ -277,5 +277,27 @@
     document.addEventListener('keydown', (event) => { if (event.key === "ArrowRight") nextQuestion(); else if (event.key === "ArrowLeft") prevQuestion(); });
     document.addEventListener('click', function(event) { const sidebar = document.getElementById('sidebar'); const toggleBtn = document.querySelector('.toggle-btn'); if (sidebar && !sidebar.classList.contains('hidden') && !sidebar.contains(event.target) && toggleBtn && !toggleBtn.contains(event.target)) { toggleSidebar(); } });
   </script>
+  <script>
+    // ===== नया एरर पकड़ने वाला कोड =====
+    // इस कोड को स्क्रिप्ट में सबसे ऊपर रखें
+    window.onerror = function(message, source, lineno, colno, error) {
+      alert(
+        "एक जावास्क्रिप्ट एरर आया है:\n\n" +
+        "एरर का मैसेज: " + message + "\n" +
+        "लाइन नंबर: " + lineno
+      );
+      // यह सुनिश्चित करता है कि हमें सिर्फ हमारा अलर्ट दिखे
+      return true; 
+    };
+    // ===== एरर पकड़ने वाला कोड समाप्त =====
+
+
+    // आपका बाकी का पूरा जावास्क्रिप्ट कोड यहाँ से शुरू होता है...
+    // ===== ग्लोबल वेरिएबल्स =====
+    let originalQuestions = []; 
+    let questions = []; 
+    // ... और बाकी का पूरा कोड जैसा मैंने पिछली बार दिया था ...
+
+  </script>
 </body>
 </html>
