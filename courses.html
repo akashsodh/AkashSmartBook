@@ -11,7 +11,7 @@
 <body>
 
   <header class="main-header">
-    <div class="logo">मॉक टेस्ट</div>
+    <div class="logo">Akash SmartBook</div>
     <div class="user-area">
       <span id="welcome-text"></span>
       <img src="https://i.ibb.co/7j5R0yV/default-avatar.png" alt="User Profile" id="profile-pic-btn" class="profile-pic">
@@ -20,25 +20,25 @@
   </header>
 
   <main class="main-container">
-    <h1 class="page-title">उपलब्ध कोर्स</h1>
-    <p class="page-subtitle">अपनी तैयारी शुरू करने के लिए कोई भी कोर्स चुनें।</p>
+    <h1 class="page-title">Available Courses</h1>
+    <p class="page-subtitle">Choose any course to start your preparation</p>
     
     <div class="courses-grid">
       <div class="course-card">
         <div class="card-icon">
           <i class="fas fa-landmark"></i>
         </div>
-        <h2 class="card-title">Rajasthan History Test</h2>
-        <p class="card-description">राजस्थान के इतिहास, कला और संस्कृति पर आधारित महत्वपूर्ण प्रश्नों का संग्रह।</p>
-        <a href="test.html" class="card-button">टेस्ट शुरू करें</a>
+        <h2 class="card-title">RBSE Class 10 Book</h2>
+        <p class="card-description">Collection of important questions based on the history, art and culture of Rajasthan.</p>
+        <a href="test.html" class="card-button">Start Test</a>
       </div>
       <div class="course-card disabled">
         <div class="card-icon">
-          <i class="fas fa-flask"></i>
+          <i class="fas fa-landmark"></i>
         </div>
-        <h2 class="card-title">Science Test (जल्द आ रहा है)</h2>
-        <p class="card-description">विज्ञान के मौलिक सिद्धांतों और अवधारणाओं पर आधारित प्रश्नों का अभ्यास करें।</p>
-        <a href="#" class="card-button">टेस्ट शुरू करें</a>
+        <h2 class="card-title">RBSE Class 9 (Comming Soon..)</h2>
+        <p class="card-description">Practice questions based on the medieval history of Rajasthan.</p>
+        <a href="#" class="card-button">Start Test</a>
       </div>
     </div>
   </main>
@@ -46,11 +46,11 @@
   <div id="profileModal" class="modal">
     <div class="modal-content">
       <span class="close-btn">&times;</span>
-      <h2>आपकी प्रोफाइल</h2>
+      <h2>Your Account</h2>
       <div class="profile-details">
         <img id="modal-profile-pic" src="https://i.ibb.co/7j5R0yV/default-avatar.png" alt="Profile Picture">
-        <p><strong>नाम:</strong> <span id="modal-user-name">Loading...</span></p>
-        <p><strong>ईमेल:</strong> <span id="modal-user-email">Loading...</span></p>
+        <p><strong>Name:</strong> <span id="modal-user-name">Loading...</span></p>
+        <p><strong>Email:</strong> <span id="modal-user-email">Loading...</span></p>
       </div>
       
       <div id="password-management-section">
@@ -208,6 +208,148 @@
                 });
         }
     });
+    
+    
+// ==================== नया और अपडेटेड: स्टार्ट टेस्ट मॉडल लॉजिक ====================
+document.addEventListener('DOMContentLoaded', function() {
+  // मॉडल और फॉर्म एलिमेंट्स के रेफरेंस
+  const startTestModal = document.getElementById('startTestModal');
+  const closeTestModalBtn = document.getElementById('closeTestModal');
+  const testConfigForm = document.getElementById('testConfigForm');
+  const categorySelect = document.getElementById('questionCategory');
+  const numQuestionsInput = document.getElementById('numQuestions');
+  const allQuestionsCheckbox = document.getElementById('allQuestionsCheckbox');
+
+  let allQuestionsData = []; // json से लोड किए गए सभी प्रश्नों को स्टोर करने के लिए
+
+  // "टेस्ट शुरू करें" बटनों पर क्लिक लिस्नर
+  document.querySelectorAll('.course-card .card-button').forEach(button => {
+    if (!button.closest('.course-card.disabled')) {
+      button.addEventListener('click', (e) => {
+        e.preventDefault(); 
+        populateCategoriesAndCount(); // अब यह फंक्शन कॉल होगा
+        startTestModal.style.display = 'block';
+      });
+    }
+  });
+
+  // मॉडल बंद करने के इवेंट्स
+  closeTestModalBtn.addEventListener('click', () => {
+    startTestModal.style.display = 'none';
+  });
+  window.addEventListener('click', (event) => {
+    if (event.target == startTestModal) {
+      startTestModal.style.display = 'none';
+    }
+  });
+
+  // श्रेणियों और प्रश्न संख्या को अपडेट करने का फंक्शन
+  async function populateCategoriesAndCount() {
+    try {
+      const response = await fetch('questions.json');
+      allQuestionsData = await response.json(); // प्रश्नों को स्टोर करें
+      
+      const categories = new Set(allQuestionsData.map(q => q.category).filter(Boolean));
+      categorySelect.innerHTML = '<option value="all">सभी श्रेणियाँ</option>';
+      categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categorySelect.appendChild(option);
+      });
+
+      updateQuestionCount(); // शुरुआती संख्या अपडेट करें
+
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  }
+
+  // श्रेणी या चेकबॉक्स बदलने पर प्रश्न संख्या अपडेट करने का फंक्शन
+  function updateQuestionCount() {
+    const selectedCategory = categorySelect.value;
+    const filteredQuestions = selectedCategory === 'all'
+        ? allQuestionsData
+        : allQuestionsData.filter(q => q.category === selectedCategory);
+    
+    const count = filteredQuestions.length;
+    numQuestionsInput.max = count; // अधिकतम मान सेट करें
+
+    if (allQuestionsCheckbox.checked) {
+        numQuestionsInput.value = count; // इनपुट में कुल संख्या भरें
+        numQuestionsInput.disabled = true; // इनपुट को अक्षम करें
+    } else {
+        numQuestionsInput.disabled = false; // इनपुट को सक्षम करें
+        if (parseInt(numQuestionsInput.value) > count) {
+            numQuestionsInput.value = count; // यदि वर्तमान मान अधिकतम से अधिक है, तो उसे रीसेट करें
+        }
+    }
+  }
+
+  // इवेंट लिस्नर: जब श्रेणी या चेकबॉक्स बदलता है
+  categorySelect.addEventListener('change', updateQuestionCount);
+  allQuestionsCheckbox.addEventListener('change', updateQuestionCount);
+
+
+  // फॉर्म सबमिट होने पर टेस्ट शुरू करें
+  testConfigForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const mode = document.querySelector('input[name="testMode"]:checked').value;
+    const count = numQuestionsInput.value; // यहां से हमेशा सही मान मिलेगा
+    const type = document.querySelector('input[name="selectionType"]:checked').value;
+    const category = categorySelect.value;
+    const url = `test.html?mode=${mode}&count=${count}&type=${type}&category=${encodeURIComponent(category)}`;
+    window.location.href = url;
+  });
+});
+
   </script>
+  
+  <div id="startTestModal" class="modal">
+    <div class="modal-content" style="max-width: 500px; text-align: left;">
+      <span class="close-btn" id="closeTestModal">&times;</span>
+      <h2>Configure Your Test</h2>
+      <p>Choose these options to start your preparation.</p>
+      
+      <form id="testConfigForm">
+        <div class="modal-form-group">
+          <label><strong>Choose Mode:</strong></label><br>
+          <input type="radio" id="modeQuiz" name="testMode" value="quiz" checked>
+          <label for="modeQuiz" class="radio-label">Quiz Mode (See Answers Instantly)</label><br>
+          <input type="radio" id="modeTest" name="testMode" value="test">
+          <label for="modeTest" class="radio-label">Test Mode (See Result at the end)</label>
+        </div>
+
+        <div class="modal-form-group">
+          <label for="numQuestions"><strong>Number of questions:</strong></label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+              <input type="number" id="numQuestions" value="20" min="1" class="modal-input" style="flex-grow: 1;">
+              <input type="checkbox" id="allQuestionsCheckbox" style="margin-left: 5px;">
+              <label for="allQuestionsCheckbox" class="radio-label">All Questions</label>
+          </div>
+        </div>
+
+        <div class="modal-form-group">
+          <label><strong>How to Choose Questions:</strong></label><br>
+          <input type="radio" id="typeSequential" name="selectionType" value="sequential" checked>
+          <label for="typeSequential" class="radio-label">From Starting (Sequential)</label><br>
+          <input type="radio" id="typeRandom" name="selectionType" value="random">
+          <label for="typeRandom" class="radio-label">from Anywhere (Random)</label>
+        </div>
+
+        <div class="modal-form-group">
+          <label for="questionCategory"><strong>Choose Topic:</strong></label>
+          <select id="questionCategory" name="category" class="modal-input">
+            <option value="all">All Topics</option>
+            </select>
+        </div>
+
+        <button type="submit" id="startTestBtn" class="card-button" style="width: 100%; margin-top: 20px;">START TEST</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  
 </body>
 </html>

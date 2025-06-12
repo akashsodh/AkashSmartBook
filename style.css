@@ -770,3 +770,33 @@ body {
 .password-feedback.success {
     color: #2ecc71; /* हरा */
 }
+
+/* ... आपकी मौजूदा CSS ... */
+
+/* स्टार्ट टेस्ट मॉडल के लिए स्टाइल */
+.modal-form-group {
+  margin-bottom: 15px;
+}
+.modal-form-group label {
+  margin-bottom: 5px;
+  display: inline-block;
+  font-weight: normal; /* डिफ़ॉल्ट लेबल स्टाइल को ओवरराइड करें */
+  background: none;
+  padding: 0;
+  cursor: default;
+}
+.modal-form-group label.radio-label {
+    font-weight: normal;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.modal-content input[type="radio"] {
+  margin-right: 5px;
+}
