@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <title>डीबगिंग टेस्ट</title>
+</head>
+<body>
+    <h1>डीबगिंग टेस्ट पेज</h1>
+    <p>यह पेज लोड होने के बाद आपको नीचे दिए गए तीन में से एक अलर्ट दिखना चाहिए।</p>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <script src="script.js"></script>
+
+    <script>
+        try {
+            if (auth) {
+                alert("सफलता! 'auth' ऑब्जेक्ट सफलतापूर्वक लोड हो गया है। इसका मतलब आपकी script.js फाइल और Firebase कॉन्फ़िगरेशन सही है।");
+            } else {
+                alert("समस्या! 'auth' ऑब्जेक्ट तो मिला, लेकिन वह खाली (null) है।");
+            }
+        } catch (e) {
+            alert("बहुत बड़ी समस्या! 'auth' ऑब्जेक्ट मिला ही नहीं। इसका मतलब script.js फाइल लोड नहीं हो रही है। एरर: " + e.message);
+        }
+    </script>
+</body>
+</html>
