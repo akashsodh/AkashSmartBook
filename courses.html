@@ -3,47 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Courses</title>
+  <title>Courses - Mock Test</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <div class="quiz-container" style="margin-top: 50px;">
-    <div id="user-info" style="text-align: right; margin-bottom: 20px;"></div>
-    <h1>एक कोर्स चुनें</h1>
-    <div id="courses-list">
-        <a href="test.html" class="button" style="display:block; text-align:center; margin-bottom:15px; text-decoration:none;">Rajasthan History Test</a>
+
+  <header class="main-header">
+    <div class="logo">मॉक टेस्ट</div>
+    <div class="user-area">
+      <span id="welcome-text"></span>
+      <img src="https://i.ibb.co/7j5R0yV/default-avatar.png" alt="User Profile" id="profile-pic-btn" class="profile-pic">
+      <button id="logout-btn" class="header-logout-btn"><i class="fas fa-sign-out-alt"></i></button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <h1 class="page-title">उपलब्ध कोर्स</h1>
+    <p class="page-subtitle">अपनी तैयारी शुरू करने के लिए कोई भी कोर्स चुनें।</p>
+    
+    <div class="courses-grid">
+      <div class="course-card">
+        <div class="card-icon">
+          <i class="fas fa-landmark"></i>
         </div>
-    <button id="logout-btn" style="width: 100%; background: #e74c3c; margin-top: 20px;">लॉगआउट करें</button>
+        <h2 class="card-title">Rajasthan History Test</h2>
+        <p class="card-description">राजस्थान के इतिहास, कला और संस्कृति पर आधारित महत्वपूर्ण प्रश्नों का संग्रह।</p>
+        <a href="test.html" class="card-button">टेस्ट शुरू करें</a>
+      </div>
+
+      <div class="course-card disabled">
+        <div class="card-icon">
+          <i class="fas fa-flask"></i>
+        </div>
+        <h2 class="card-title">Science Test (जल्द आ रहा है)</h2>
+        <p class="card-description">विज्ञान के मौलिक सिद्धांतों और अवधारणाओं पर आधारित प्रश्नों का अभ्यास करें।</p>
+        <a href="#" class="card-button">टेस्ट शुरू करें</a>
+      </div>
+      
+       </div>
+  </main>
+
+  <div id="profileModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn">&times;</span>
+      <h2>आपकी प्रोफाइल</h2>
+      <div class="profile-details">
+        <img id="modal-profile-pic" src="https://i.ibb.co/7j5R0yV/default-avatar.png" alt="Profile Picture">
+        <p><strong>नाम:</strong> <span id="modal-user-name">Loading...</span></p>
+        <p><strong>ईमेल:</strong> <span id="modal-user-email">Loading...</span></p>
+      </div>
+    </div>
   </div>
+
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-
   <script src="script.js"></script>
 
   <script>
-    const userInfoDiv = document.getElementById('user-info');
+    const welcomeText = document.getElementById('welcome-text');
     const logoutBtn = document.getElementById('logout-btn');
+    
+    // Modal के लिए वेरिएबल्स
+    const modal = document.getElementById('profileModal');
+    const profilePicBtn = document.getElementById('profile-pic-btn');
+    const closeBtn = document.querySelector('.close-btn');
 
-    // जांचें कि यूजर लॉग इन है या नहीं (Auth Guard)
+    const modalProfilePic = document.getElementById('modal-profile-pic');
+    const modalUserName = document.getElementById('modal-user-name');
+    const modalUserEmail = document.getElementById('modal-user-email');
+
+    // जांचें कि यूजर लॉग इन है या नहीं
     auth.onAuthStateChanged(user => {
         if (user) {
             // यूजर लॉग इन है
-            userInfoDiv.innerHTML = `स्वागत है, <strong>${user.displayName || user.email}</strong>`;
+            welcomeText.innerText = `नमस्ते, ${user.displayName || user.email.split('@')[0]}`;
+            
+            // प्रोफाइल पिक्चर सेट करें
+            if (user.photoURL) {
+              profilePicBtn.src = user.photoURL;
+              modalProfilePic.src = user.photoURL;
+            }
+
+            // Modal में जानकारी भरें
+            modalUserName.innerText = user.displayName || 'N/A';
+            modalUserEmail.innerText = user.email;
+
         } else {
             // यूजर लॉग इन नहीं है, उसे लॉगिन पेज पर भेजें
             window.location.href = 'index.html';
         }
     });
 
-    // लॉगआउट
+    // लॉगआउट बटन
     logoutBtn.addEventListener('click', () => {
         auth.signOut().then(() => {
             console.log('User signed out.');
             window.location.href = 'index.html';
         });
+    });
+
+    // Modal खोलने और बंद करने का लॉजिक
+    profilePicBtn.addEventListener('click', () => {
+      modal.style.display = 'block';
+    });
+
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (event) => {
+      if (event.target == modal) {
+        modal.style.display = 'none';
+      }
     });
   </script>
 </body>
