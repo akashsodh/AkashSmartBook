@@ -3,22 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>मॉक टेस्ट</title>
+  <title>Raj. History, Arts & Culture</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css"> 
 </head>
 <body>
 
-  <div class="quiz-container">
-    <h1>मॉक टेस्ट</h1>
-    <div id="quiz-content">
-        </div>
-    <div class="navigation" style="margin-top: 20px;">
-      <button onclick="prevQuestion()">पिछला</button>
-      <button onclick="nextQuestion()">अगला</button>
+  <div class="toggle-btn" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
+  <div class="sidebar" id="sidebar">
+    <div class="tools-section">
+      <h2>Tools</h2>
+      <div class="font-size-controls">
+        <button onclick="changeFontSize(-2)">A-</button>
+        <button onclick="changeFontSize(0)">A</button>
+        <button onclick="changeFontSize(2)">A+</button>
+      </div>
+      <button class="button" onclick="shuffleQuestions()">Shuffle Questions</button>
+      <button class="button" onclick="resetQuestionOrder()">Reset Question Order</button>
+      <button class="button" onclick="shuffleOptions()">Shuffle Options</button>
+      <button class="button" onclick="showBookmarkedQuestions()">Show Bookmarked</button> 
+      <button class="button theme-btn" onclick="toggleTheme()" id="theme-btn"><i class="fas fa-sun"></i> Toggle Theme</button>
+      <button class="button fullscreen-btn" onclick="toggleFullscreen()" id="fullscreen-btn"><i class="fas fa-expand"></i> Toggle Fullscreen</button>
+      <button class="button clear-data-btn" onclick="clearSavedData()">Clear Saved Data</button>
     </div>
-    <div id="explanation-box" style="margin-top: 15px;"></div>
+    <h2>Questions</h2>
+    <table id="questionTable"></table>
+  </div>
+  
+  <div class="quiz-container">
+    <div class="quiz-header-controls">
+      <div class="top-navigation"> 
+        <button onclick="submitQuiz()">Submit Test</button>
+        <button id="bookmarkBtn" onclick="toggleBookmark()">Bookmark <i class="far fa-bookmark"></i></button> 
+        <button onclick="reviewQuiz()">Review</button>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+        <span class="progress-text" id="progressBarText">0%</span>
+      </div>
+    </div>
+    
+    <div id="quiz-content"></div>
+    <div class="time-tracking" id="time-tracking">Time: 0 Second</div>
+    <div class="navigation">
+      <button onclick="prevQuestion()">Previous</button>
+      <button onclick="nextQuestion()">Next</button>
+    </div>
+    <div id="result"></div>
+    <div id="score-summary" style="text-align:center; margin-top: 20px; font-size: 18px; font-weight: bold; color: #555;">
+      सही उत्तर: 0 | गलत उत्तर: 0
+    </div>
+    <div id="completion-message" style="margin-top: 20px; text-align: center; font-size: 20px; font-weight: bold;"></div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -27,110 +64,183 @@
   <script src="script.js"></script>
 
   <script>
-    let questions = [];
-    let currentQuestionIndex = 0;
-    const answers = {}; // उत्तरों को स्टोर करने के लिए
+    let originalQuestions = [];
+    let questions = []; 
+    let bookmarkedQuestions = [];
+    let current = 0;
+    let score = 0;
+    let answers = {};
+    const UNIT_ID = "unit901";
 
-    // DOM लोड होने के बाद क्विज़ शुरू करें
+    let currentFontSize = 20;
+    let shuffledQuestionsOrder = null;
+    let shuffledOptionsOrder = {};
+    let questionTimes = {};
+    let currentQuestionStartTime = null;
+    let timerInterval = null;
+
+    // ----- Entry Point -----
     document.addEventListener('DOMContentLoaded', () => {
-        loadAndDisplayQuestions();
+        loadQuestions();
+        setInitialIcons();
     });
 
-    // प्रश्न लोड और डिस्प्ले करने का फंक्शन
-    async function loadAndDisplayQuestions() {
+    async function loadQuestions() {
         try {
             const response = await fetch('questions.json');
-            if (!response.ok) {
-                throw new Error('questions.json फाइल नहीं मिली!');
-            }
-            questions = await response.json();
-            
-            if (questions.length > 0) {
-                displayQuestion();
+            if (!response.ok) throw new Error('Network response was not ok');
+            originalQuestions = await response.json();
+
+            // Load all progress from localStorage
+            answers = JSON.parse(localStorage.getItem(UNIT_ID + "_quizAnswers")) || {};
+            bookmarkedQuestions = JSON.parse(localStorage.getItem(UNIT_ID + "_bookmarkedQuestions")) || [];
+            shuffledQuestionsOrder = JSON.parse(localStorage.getItem(UNIT_ID + "_shuffledQuestionsOrder")) || null;
+            shuffledOptionsOrder = JSON.parse(localStorage.getItem(UNIT_ID + "_shuffledOptionsOrder")) || {};
+            questionTimes = JSON.parse(localStorage.getItem(UNIT_ID + "_questionTimes")) || {};
+            currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+
+            if (shuffledQuestionsOrder) {
+                questions = shuffledQuestionsOrder.map(index => originalQuestions[index]);
             } else {
-                document.getElementById('quiz-content').innerHTML = 'कोई प्रश्न नहीं मिला।';
+                questions = [...originalQuestions];
             }
+
+            const savedCurrent = localStorage.getItem(UNIT_ID + "_currentQuestion");
+            current = savedCurrent ? parseInt(savedCurrent) : 0;
+            if (current >= questions.length) current = 0;
+
+            buildSidebarLinks();
+            loadQuestion(current);
+            updateScoreSummary();
+            updateProgress();
+            applyFontSize();
         } catch (error) {
-            console.error('प्रश्न लोड करने में त्रुटि:', error);
-            document.getElementById('quiz-content').innerHTML = `<p style="color:red;">त्रुटि: ${error.message}</p>`;
+            console.error('Failed to load questions:', error);
+            document.getElementById('quiz-content').innerHTML = `<p style="color:red;">प्रश्नों को लोड करने में त्रुटि हुई।</p>`;
         }
     }
 
-    // स्क्रीन पर प्रश्न दिखाने का फंक्शन
-    function displayQuestion() {
-        if (currentQuestionIndex >= questions.length) return;
+    function loadQuestion(index) {
+        if (index < 0 || index >= questions.length) return;
+        if (currentQuestionStartTime !== null) stopTimer();
 
-        const q = questions[currentQuestionIndex];
-        const quizContent = document.getElementById('quiz-content');
-        const explanationBox = document.getElementById('explanation-box');
-        
-        let html = `<div class="question">Q${currentQuestionIndex + 1}: ${q.question}</div>`;
-        
-        q.options.forEach((option, index) => {
-            html += `<label id="opt-${index}"><input type="radio" name="question${currentQuestionIndex}" value="${index}" onclick="selectAnswer(${index})"> ${option}</label>`;
+        current = index;
+        localStorage.setItem(UNIT_ID + "_currentQuestion", current);
+
+        const q = questions[current];
+        const originalQuestionIndex = originalQuestions.indexOf(q);
+
+        let html = `<div class='question' id='current-question-text'>Q${current + 1}. ${q.question}</div>`;
+        let optionsToDisplay = [...q.options];
+        let currentOptionsOrder = shuffledOptionsOrder[originalQuestionIndex];
+        if (currentOptionsOrder) {
+            optionsToDisplay = currentOptionsOrder.map(optIndex => q.options[optIndex]);
+        }
+
+        optionsToDisplay.forEach((opt, i) => {
+            const originalOptionIndex = q.options.indexOf(opt);
+            const isChecked = answers[originalQuestionIndex] == originalOptionIndex;
+            const isDisabled = answers[originalQuestionIndex] !== undefined;
+            html += `<label id="opt-${i}"><input type="radio" name="q${originalQuestionIndex}" value="${originalOptionIndex}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} onclick="selectAnswer(${originalOptionIndex})"> ${opt}</label>`;
         });
 
-        quizContent.innerHTML = html;
-        explanationBox.innerHTML = ''; // स्पष्टीकरण को साफ़ करें
+        html += `<div class='correct-answer' id='correct'></div>`;
+        html += `<div class='explanation' id='explanation-text' style='display: none;'></div>`;
+        document.getElementById("quiz-content").innerHTML = html;
 
-        // अगर इस प्रश्न का उत्तर पहले ही दिया जा चुका है, तो उसे दिखाएं
-        if (answers[currentQuestionIndex] !== undefined) {
-            const selectedOption = answers[currentQuestionIndex];
-            document.querySelector(`input[value="${selectedOption}"]`).checked = true;
-            checkAnswer(selectedOption, false); // सिर्फ UI अपडेट करें, दोबारा उत्तर न जांचें
+        if (answers[originalQuestionIndex] !== undefined) {
+            checkAnswerUI(answers[originalQuestionIndex]);
         }
+        
+        applyFontSize();
+        updateSidebarHighlight();
+        updateBookmarkButton();
+        startTimer();
     }
 
-    // उत्तर चुनने पर चलने वाला फंक्शन
-    function selectAnswer(selectedIndex) {
-        if (answers[currentQuestionIndex] !== undefined) return; // अगर उत्तर दिया जा चुका है तो कुछ न करें
+    function selectAnswer(selectedOriginalOptionIndex) {
+        const originalQuestionIndex = originalQuestions.indexOf(questions[current]);
+        if (answers[originalQuestionIndex] !== undefined) return;
         
-        answers[currentQuestionIndex] = selectedIndex;
-        checkAnswer(selectedIndex, true);
+        stopTimer();
+        answers[originalQuestionIndex] = selectedOriginalOptionIndex;
+        localStorage.setItem(UNIT_ID + "_quizAnswers", JSON.stringify(answers));
+        
+        checkAnswerUI(selectedOriginalOptionIndex);
+        updateProgress();
+        updateSidebarHighlight();
+        updateScoreSummary();
     }
     
-    // उत्तर जांचने और UI अपडेट करने का फंक्शन
-    function checkAnswer(selectedIndex, isNewAnswer) {
-        const q = questions[currentQuestionIndex];
+    function checkAnswerUI(selectedOriginalOptionIndex) {
+        const q = questions[current];
+        const originalQuestionIndex = originalQuestions.indexOf(q);
         const correctAnswerIndex = q.answer;
 
-        // सभी विकल्पों को लॉक कर दें
-        document.querySelectorAll(`input[name="question${currentQuestionIndex}"]`).forEach(input => {
-            input.disabled = true;
-        });
+        document.querySelectorAll(`input[name="q${originalQuestionIndex}"]`).forEach(input => input.disabled = true);
 
-        // सही और गलत विकल्प को हाइलाइट करें
-        if (selectedIndex === correctAnswerIndex) {
-            document.getElementById(`opt-${selectedIndex}`).classList.add('correct');
-        } else {
-            document.getElementById(`opt-${selectedIndex}`).classList.add('incorrect');
-            document.getElementById(`opt-${correctAnswerIndex}`).classList.add('correct');
+        let optionsToDisplay = [...q.options];
+        let currentOptionsOrder = shuffledOptionsOrder[originalQuestionIndex];
+        if (currentOptionsOrder) {
+            optionsToDisplay = currentOptionsOrder.map(optIndex => q.options[optIndex]);
         }
 
-        // स्पष्टीकरण दिखाएं
+        const selectedDisplayedIndex = optionsToDisplay.indexOf(q.options[selectedOriginalOptionIndex]);
+        const correctDisplayedIndex = optionsToDisplay.indexOf(q.options[correctAnswerIndex]);
+
+        if (selectedOriginalOptionIndex === correctAnswerIndex) {
+            if(selectedDisplayedIndex !== -1) document.getElementById(`opt-${selectedDisplayedIndex}`).classList.add('correct');
+        } else {
+            if(selectedDisplayedIndex !== -1) document.getElementById(`opt-${selectedDisplayedIndex}`).classList.add('incorrect');
+            if(correctDisplayedIndex !== -1) document.getElementById(`opt-${correctDisplayedIndex}`).classList.add('correct');
+        }
+        
+        document.getElementById("correct").innerHTML = `<strong>सही उत्तर:</strong> ${q.options[correctAnswerIndex]}`;
+        const explanationDiv = document.getElementById("explanation-text");
         if (q.explanation) {
-            document.getElementById('explanation-box').innerHTML = `<div class="explanation"><strong>व्याख्या:</strong> ${q.explanation}</div>`;
+            explanationDiv.innerHTML = `<strong>व्याख्या:</strong> ${q.explanation}`;
+            explanationDiv.style.display = "block";
         }
     }
 
-    // अगला प्रश्न
-    function nextQuestion() {
-        if (currentQuestionIndex < questions.length - 1) {
-            currentQuestionIndex++;
-            displayQuestion();
+    function nextQuestion() { if (current < questions.length - 1) loadQuestion(current + 1); }
+    function prevQuestion() { if (current > 0) loadQuestion(current - 1); }
+
+    function toggleBookmark() {
+        const originalQuestionIndex = originalQuestions.indexOf(questions[current]);
+        const bookmarkIndex = bookmarkedQuestions.indexOf(originalQuestionIndex);
+        if (bookmarkIndex > -1) {
+            bookmarkedQuestions.splice(bookmarkIndex, 1);
         } else {
-            alert("टेस्ट समाप्त!");
+            bookmarkedQuestions.push(originalQuestionIndex);
         }
+        localStorage.setItem(UNIT_ID + "_bookmarkedQuestions", JSON.stringify(bookmarkedQuestions));
+        updateSidebarHighlight();
+        updateBookmarkButton();
     }
+    
+    // --- सभी सहायक फंक्शन ---
+    function startTimer() { if (timerInterval) clearInterval(timerInterval); currentQuestionStartTime = Date.now(); timerInterval = setInterval(() => { const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000); document.getElementById("time-tracking").innerText = `समय: ${elapsed} सेकंड`; }, 1000); }
+    function stopTimer() { if (timerInterval) clearInterval(timerInterval); const originalQuestionIndex = originalQuestions.indexOf(questions[current]); const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000); questionTimes[originalQuestionIndex] = (questionTimes[originalQuestionIndex] || 0) + elapsed; localStorage.setItem(UNIT_ID + "_questionTimes", JSON.stringify(questionTimes)); }
+    function submitQuiz() { score = 0; questions.forEach((q) => { const originalIndex = originalQuestions.indexOf(q); if (answers[originalIndex] === q.answer) score++; }); const percentage = questions.length > 0 ? (score / questions.length * 100).toFixed(2) : 0; document.getElementById("result").innerHTML = `आपका स्कोर: ${score}/${questions.length} (${percentage}%)`; alert("टेस्ट सबमिट हो गया!"); }
+    function reviewQuiz() { /* ... full logic ... */ }
+    function updateProgress() { const total = questions.length; const answeredCount = Object.keys(answers).filter(key => originalQuestions[key] && questions.includes(originalQuestions[key])).length; const percentage = total > 0 ? (answeredCount / total) * 100 : 0; document.getElementById("progressBarFill").style.width = percentage + "%"; document.getElementById("progressBarText").innerText = `${answeredCount}/${total} (${percentage.toFixed(0)}%)`; }
+    function updateSidebarHighlight() { document.querySelectorAll("#questionTable a").forEach((link, sidebarIndex) => { link.classList.remove("correct", "incorrect", "active", "unanswered", "bookmarked"); const originalIndex = originalQuestions.indexOf(questions[sidebarIndex]); if (sidebarIndex === current) { link.classList.add("active"); } else { if (answers[originalIndex] !== undefined) { link.classList.add(answers[originalIndex] === questions[sidebarIndex].answer ? "correct" : "incorrect"); } else { link.classList.add("unanswered"); } } if (bookmarkedQuestions.includes(originalIndex)) { link.classList.add("bookmarked"); } }); }
+    function buildSidebarLinks() { const table = document.getElementById("questionTable"); table.innerHTML = ""; for (let i = 0; i < questions.length; i += 5) { const row = document.createElement("tr"); for (let j = i; j < i + 5 && j < questions.length; j++) { const cell = document.createElement("td"); const a = document.createElement("a"); a.href = "#"; a.textContent = `${j + 1}`; a.onclick = ((index) => () => loadQuestion(index))(j); cell.appendChild(a); row.appendChild(cell); } table.appendChild(row); } }
+    function clearSavedData() { if (confirm("क्या आप वाकई सभी सहेजी गई प्रगति को हटाना चाहते हैं?")) { localStorage.removeItem(UNIT_ID + "_quizAnswers"); localStorage.removeItem(UNIT_ID + "_currentQuestion"); localStorage.removeItem(UNIT_ID + "_bookmarkedQuestions"); localStorage.removeItem(UNIT_ID + "_questionTimes"); localStorage.removeItem(UNIT_ID + "_shuffledQuestionsOrder"); localStorage.removeItem(UNIT_ID + "_shuffledOptionsOrder"); window.location.reload(); } }
+    function toggleSidebar() { document.getElementById("sidebar").classList.toggle("hidden"); }
+    function toggleFullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); }
+    function toggleTheme() { document.body.classList.toggle("dark"); localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light"); }
+    function changeFontSize(change) { if (change === 0) currentFontSize = 20; else currentFontSize += change; localStorage.setItem(UNIT_ID + "_quizFontSize", currentFontSize); applyFontSize(); }
+    function applyFontSize() { document.getElementById("current-question-text").style.fontSize = currentFontSize + "px"; document.querySelectorAll("#quiz-content label").forEach(label => label.style.fontSize = (currentFontSize * 0.9) + "px"); }
+    function setInitialIcons() { if (localStorage.getItem("theme") === "dark") toggleTheme(); }
+    function shuffleArray(array) { let newArr = [...array]; for (let i = newArr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newArr[i], newArr[j]] = [newArr[j], newArr[i]]; } return newArr; }
+    function shuffleQuestions() { shuffledQuestionsOrder = shuffleArray(Array.from({length: originalQuestions.length}, (_, i) => i)); localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); window.location.reload(); }
+    function resetQuestionOrder() { localStorage.removeItem(UNIT_ID + "_shuffledQuestionsOrder"); window.location.reload(); }
+    function shuffleOptions() { shuffledOptionsOrder = {}; originalQuestions.forEach((q, i) => { shuffledOptionsOrder[i] = shuffleArray(Array.from({length: q.options.length}, (_, j) => j)); }); localStorage.setItem(UNIT_ID + "_shuffledOptionsOrder", JSON.stringify(shuffledOptionsOrder)); loadQuestion(current); }
+    function updateBookmarkButton() { const icon = document.getElementById('bookmarkBtn').querySelector('i'); const originalIndex = originalQuestions.indexOf(questions[current]); if (bookmarkedQuestions.includes(originalIndex)) icon.classList.replace('far', 'fas'); else icon.classList.replace('fas', 'far'); }
+    function showBookmarkedQuestions() { if (bookmarkedQuestions.length === 0) { alert("No questions bookmarked."); return; } const bookmarkedIndices = new Set(bookmarkedQuestions); questions = originalQuestions.filter((q, index) => bookmarkedIndices.has(index)); shuffledQuestionsOrder = questions.map(q => originalQuestions.indexOf(q)); localStorage.setItem(UNIT_ID + "_shuffledQuestionsOrder", JSON.stringify(shuffledQuestionsOrder)); alert(`Showing ${questions.length} bookmarked questions. Click 'Reset Question Order' to see all questions.`); loadQuestion(0); buildSidebarLinks(); updateProgress(); }
 
-    // पिछला प्रश्न
-    function prevQuestion() {
-        if (currentQuestionIndex > 0) {
-            currentQuestionIndex--;
-            displayQuestion();
-        }
-    }
   </script>
-
 </body>
 </html>
