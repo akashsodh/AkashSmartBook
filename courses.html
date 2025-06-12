@@ -32,7 +32,6 @@
         <p class="card-description">राजस्थान के इतिहास, कला और संस्कृति पर आधारित महत्वपूर्ण प्रश्नों का संग्रह।</p>
         <a href="test.html" class="card-button">टेस्ट शुरू करें</a>
       </div>
-
       <div class="course-card disabled">
         <div class="card-icon">
           <i class="fas fa-flask"></i>
@@ -41,8 +40,7 @@
         <p class="card-description">विज्ञान के मौलिक सिद्धांतों और अवधारणाओं पर आधारित प्रश्नों का अभ्यास करें।</p>
         <a href="#" class="card-button">टेस्ट शुरू करें</a>
       </div>
-      
-       </div>
+    </div>
   </main>
 
   <div id="profileModal" class="modal">
@@ -54,7 +52,23 @@
         <p><strong>नाम:</strong> <span id="modal-user-name">Loading...</span></p>
         <p><strong>ईमेल:</strong> <span id="modal-user-email">Loading...</span></p>
       </div>
-    </div>
+      
+      <div id="password-management-section">
+          <hr>
+          <button id="toggle-password-form-btn" class="card-button" style="margin-top: 15px; width: 100%;">पासवर्ड सेट करें</button>
+          
+          <div id="password-form-container" class="hidden" style="margin-top: 15px; text-align: left;">
+              <label for="new-password">नया पासवर्ड:</label>
+              <input type="password" id="new-password" placeholder="नया पासवर्ड दर्ज करें">
+              
+              <label for="confirm-password">पासवर्ड की पुष्टि करें:</label>
+              <input type="password" id="confirm-password" placeholder="पासवर्ड की फिर से पुष्टि करें">
+              
+              <button id="set-password-btn" class="card-button" style="width: 100%; margin-top:10px; background: #27ae60;">पासवर्ड सहेजें</button>
+          </div>
+          <p id="password-message" class="password-feedback"></p>
+      </div>
+      </div>
   </div>
 
 
@@ -76,29 +90,45 @@
     const modalUserName = document.getElementById('modal-user-name');
     const modalUserEmail = document.getElementById('modal-user-email');
 
-    // जांचें कि यूजर लॉग इन है या नहीं
+    // ===== नया: पासवर्ड सेक्शन के लिए वेरिएबल्स =====
+    const passwordManagementSection = document.getElementById('password-management-section');
+    const togglePasswordFormBtn = document.getElementById('toggle-password-form-btn');
+    const passwordFormContainer = document.getElementById('password-form-container');
+    const newPasswordInput = document.getElementById('new-password');
+    const confirmPasswordInput = document.getElementById('confirm-password');
+    const setPasswordBtn = document.getElementById('set-password-btn');
+    const passwordMessage = document.getElementById('password-message');
+
     auth.onAuthStateChanged(user => {
         if (user) {
             // यूजर लॉग इन है
             welcomeText.innerText = `नमस्ते, ${user.displayName || user.email.split('@')[0]}`;
             
-            // प्रोफाइल पिक्चर सेट करें
             if (user.photoURL) {
               profilePicBtn.src = user.photoURL;
               modalProfilePic.src = user.photoURL;
             }
-
-            // Modal में जानकारी भरें
             modalUserName.innerText = user.displayName || 'N/A';
             modalUserEmail.innerText = user.email;
 
+            // ===== नया: जांचें कि पासवर्ड सेट है या नहीं =====
+            const providers = user.providerData.map(provider => provider.providerId);
+            const hasPasswordProvider = providers.includes('password');
+
+            if (hasPasswordProvider) {
+                // अगर पासवर्ड पहले से सेट है
+                passwordManagementSection.style.display = 'none'; // या "पासवर्ड बदलें" का ऑप्शन दिखा सकते हैं
+            } else {
+                // अगर सिर्फ Google या अन्य सोशल लॉगिन है (पासवर्ड नहीं)
+                passwordManagementSection.style.display = 'block';
+            }
+
         } else {
-            // यूजर लॉग इन नहीं है, उसे लॉगिन पेज पर भेजें
+            // यूजर लॉग इन नहीं है
             window.location.href = 'index.html';
         }
     });
 
-    // लॉगआउट बटन
     logoutBtn.addEventListener('click', () => {
         auth.signOut().then(() => {
             console.log('User signed out.');
@@ -106,9 +136,10 @@
         });
     });
 
-    // Modal खोलने और बंद करने का लॉजिक
     profilePicBtn.addEventListener('click', () => {
       modal.style.display = 'block';
+      passwordMessage.innerText = ''; // पॉप-अप खोलने पर संदेश साफ़ करें
+      passwordFormContainer.classList.add('hidden'); // फॉर्म को छिपा दें
     });
 
     closeBtn.addEventListener('click', () => {
@@ -119,6 +150,63 @@
       if (event.target == modal) {
         modal.style.display = 'none';
       }
+    });
+
+    // ===== नया: पासवर्ड फॉर्म को दिखाने/छिपाने का लॉजिक =====
+    togglePasswordFormBtn.addEventListener('click', () => {
+        passwordFormContainer.classList.toggle('hidden');
+    });
+
+    // ===== नया: पासवर्ड सेट करने का मुख्य लॉजिक =====
+    setPasswordBtn.addEventListener('click', () => {
+        const newPassword = newPasswordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+
+        // वैलिडेशन
+        if (!newPassword || !confirmPassword) {
+            passwordMessage.className = 'password-feedback error';
+            passwordMessage.innerText = 'कृपया दोनों फ़ील्ड भरें।';
+            return;
+        }
+        if (newPassword.length < 6) {
+            passwordMessage.className = 'password-feedback error';
+            passwordMessage.innerText = 'पासवर्ड कम से कम 6 अक्षर का होना चाहिए।';
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            passwordMessage.className = 'password-feedback error';
+            passwordMessage.innerText = 'पासवर्ड मेल नहीं खाते।';
+            return;
+        }
+
+        const user = auth.currentUser;
+        if (user) {
+            // ईमेल/पासवर्ड क्रेडेंशियल बनाएं
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, newPassword);
+
+            // मौजूदा यूज़र से नए क्रेडेंशियल को लिंक करें
+            user.linkWithCredential(credential)
+                .then(() => {
+                    passwordMessage.className = 'password-feedback success';
+                    passwordMessage.innerText = 'पासवर्ड सफलतापूर्वक सेट हो गया है!';
+                    passwordFormContainer.classList.add('hidden'); // सफल होने पर फॉर्म छिपा दें
+                    setTimeout(() => { modal.style.display = 'none'; }, 2000); // 2 सेकंड बाद पॉप-अप बंद करें
+                })
+                .catch((error) => {
+                    passwordMessage.className = 'password-feedback error';
+                    // संभावित त्रुटियों को संभालें
+                    switch (error.code) {
+                        case 'auth/credential-already-in-use':
+                            passwordMessage.innerText = 'यह खाता पहले से ही किसी अन्य यूज़र से जुड़ा हुआ है।';
+                            break;
+                        case 'auth/weak-password':
+                            passwordMessage.innerText = 'पासवर्ड बहुत कमजोर है।';
+                            break;
+                        default:
+                            passwordMessage.innerText = 'एक त्रुटि हुई: ' + error.message;
+                    }
+                });
+        }
     });
   </script>
 </body>
