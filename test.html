@@ -11,8 +11,7 @@
 </head>
 <body>
   <div class="toggle-btn" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
-  <div class="sidebar" id="sidebar">
-    <div class="tools-section">
+  <div class="sidebar hidden" id="sidebar"> <div class="tools-section">
         <h2>Tools</h2>
         <div class="font-size-controls">
             <button onclick="changeFontSize(-2)">A-</button>
@@ -75,7 +74,7 @@
     let currentQuestionStartTime = null;
     let timerInterval = null;
 
-    // फायरबेस फंक्शन (अपरिवर्तित)
+    // फायरबेस फंक्शन (बदला गया)
     async function saveProgressToFirestore() {
       const user = auth.currentUser;
       if (!user) return;
@@ -86,6 +85,7 @@
         bookmarkedQuestions: bookmarkedQuestions,
         questionTimes: questionTimes,
         config: quizConfig, // कॉन्फ़िगरेशन भी सहेजें
+        fontSize: currentFontSize, // बदला गया: फॉन्ट साइज को सहेजा गया
         lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
       };
       try {
@@ -146,6 +146,7 @@
           if (user) {
             const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
             const doc = await progressRef.get();
+            let progressLoaded = false; // बदला गया: प्रोग्रेस लोड होने का फ्लैग
             if (doc.exists) {
                 const firestoreData = doc.data();
                 // केवल तभी लोड करें जब कॉन्फ़िगरेशन मेल खाता हो
@@ -155,13 +156,22 @@
                     bookmarkedQuestions = firestoreData.bookmarkedQuestions || [];
                     questionTimes = firestoreData.questionTimes || {};
                     current = firestoreData.currentQuestion || 0;
+                    // बदला गया: फायरबेस से फॉन्ट साइज लोड करें
+                    currentFontSize = firestoreData.fontSize || parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+                    progressLoaded = true;
                 } else {
                      console.log("Config mismatch. Starting fresh test.");
                 }
             }
+            // बदला गया: यदि फायरबेस से लोड नहीं हुआ तो ही लोकल स्टोरेज से लें
+            if (!progressLoaded) {
+                currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+            }
+          } else {
+            // यूजर लॉग इन नहीं है तो लोकल स्टोरेज से लें
+             currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
           }
           // बाकी का सेटअप
-          currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
           applyFontSize();
           buildSidebarLinks();
           loadQuestion(current);
@@ -430,11 +440,46 @@
         });
         document.getElementById('score-summary').innerText = `सही उत्तर: ${correct} | गलत उत्तर: ${wrong}`;
     }
-    function changeFontSize(change){/*...*/}
-    function applyFontSize(){/*...*/}
+    function changeFontSize(change){
+        if (change === 0) {
+            currentFontSize = 20;
+        } else {
+            currentFontSize += change;
+        }
+        if (currentFontSize < 14) currentFontSize = 14;
+        if (currentFontSize > 32) currentFontSize = 32;
+        localStorage.setItem(UNIT_ID + "_quizFontSize", currentFontSize);
+        saveProgressToFirestore(); // बदला गया: फॉन्ट साइज को सहेजने के लिए कॉल करें
+        applyFontSize();
+    }
+    function applyFontSize(){
+         const quizContent = document.getElementById('quiz-content');
+         if(quizContent) {
+            quizContent.style.fontSize = currentFontSize + 'px';
+         }
+    }
     function toggleTheme(){/*...*/}
     function toggleFullscreen(){/*...*/}
-    function clearSavedData(){/*...*/}
+    function clearSavedData(){
+        if(confirm('Are you sure you want to clear all your saved progress for this test? This action cannot be undone.')) {
+            localStorage.removeItem(UNIT_ID + "_quizAnswers");
+            localStorage.removeItem(UNIT_ID + "_currentQuestion");
+            localStorage.removeItem(UNIT_ID + "_bookmarkedQuestions");
+            localStorage.removeItem(UNIT_ID + "_questionTimes");
+             const user = auth.currentUser;
+            if (user) {
+                const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
+                progressRef.delete().then(() => {
+                    console.log("Firestore progress cleared.");
+                    window.location.reload();
+                }).catch(error => {
+                    console.error("Error clearing Firestore progress: ", error);
+                });
+            } else {
+                 window.location.reload();
+            }
+        }
+    }
     function setInitialIcons(){/*...*/}
     function stopTimer() {
       if (timerInterval) clearInterval(timerInterval);

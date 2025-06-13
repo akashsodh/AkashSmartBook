@@ -2,7 +2,7 @@ body {
   font-family: 'Poppins', sans-serif;
   background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
   margin: 0;
-  padding-left: 240px;
+  padding-left: 20px; /* बदला गया: 240px से 20px किया गया */
   color: #333;
   transition: padding-left 0.3s ease;
 }
