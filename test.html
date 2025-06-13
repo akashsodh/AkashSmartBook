@@ -58,14 +58,13 @@
   <script>
     // ग्लोबल वेरिएबल्स
     let originalQuestions = []; 
-    let questions = []; // यह अंतिम, फ़िल्टर किया हुआ प्रश्न सेट है
+    let questions = []; 
     let bookmarkedQuestions = []; 
     let current = 0; 
     let score = 0;
     let answers = {}; 
-    const UNIT_ID = "unit901";
+    const UNIT_ID = "unit901"; // यह आपके टेस्ट की यूनिक आईडी है
 
-    // नया: मोड और कॉन्फ़िगरेशन वेरिएबल्स
     let isTestMode = false;
     let quizConfig = {};
 
@@ -74,28 +73,39 @@
     let currentQuestionStartTime = null;
     let timerInterval = null;
 
-    // फायरबेस फंक्शन (बदला गया)
+    // यह फंक्शन कॉन्फ़िगरेशन की तुलना के लिए एक मानक स्ट्रिंग बनाता है
+    function getCanonicalConfigString(config) {
+      if (!config || typeof config !== 'object') return null;
+      const sortedKeys = Object.keys(config).sort();
+      const sortedConfig = {};
+      for (const key of sortedKeys) {
+        sortedConfig[key] = config[key];
+      }
+      return JSON.stringify(sortedConfig);
+    }
+
+    // फायरबेस में प्रगति सहेजने वाला फंक्शन
     async function saveProgressToFirestore() {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) return; // अगर यूजर लॉग-इन नहीं है तो कुछ न करें
       const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
       const progressData = {
         answers: answers,
         currentQuestion: current,
         bookmarkedQuestions: bookmarkedQuestions,
         questionTimes: questionTimes,
-        config: quizConfig, // कॉन्फ़िगरेशन भी सहेजें
-        fontSize: currentFontSize, // बदला गया: फॉन्ट साइज को सहेजा गया
+        config: quizConfig, 
+        fontSize: currentFontSize,
         lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
       };
       try {
-        await progressRef.set(progressData, { merge: true });
+        await progressRef.set(progressData);
       } catch (error) {
         console.error("Error saving progress to Firestore: ", error);
       }
     }
 
-    // संशोधित: क्विज़ शुरू करने का फंक्शन
+    // क्विज़ को शुरू करने वाला फंक्शन
     function initializeQuiz(allQuestions) {
         const urlParams = new URLSearchParams(window.location.search);
         quizConfig = {
@@ -110,21 +120,17 @@
         document.getElementById('score-summary').style.display = isTestMode ? 'none' : 'block';
 
         let filteredQuestions = allQuestions;
-        // 1. श्रेणी के अनुसार फ़िल्टर करें
         if (quizConfig.category !== 'all') {
             filteredQuestions = allQuestions.filter(q => q.category === quizConfig.category);
         }
 
-        // 2. प्रकार (sequential/random) के अनुसार चुनें
         if (quizConfig.type === 'random') {
-            // Fisher-Yates shuffle algorithm
             for (let i = filteredQuestions.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [filteredQuestions[i], filteredQuestions[j]] = [filteredQuestions[j], filteredQuestions[i]];
             }
         }
 
-        // 3. संख्या के अनुसार काटें (slice)
         questions = filteredQuestions.slice(0, quizConfig.count);
 
         if (questions.length === 0) {
@@ -133,49 +139,74 @@
         }
         return true;
     }
-
-
+    
+    // प्रगति लोड करने वाला मुख्य फंक्शन (संशोधित)
     async function loadQuestions() {
       try {
         const response = await fetch('questions.json');
         originalQuestions = await response.json();
         
-        if (!initializeQuiz(originalQuestions)) return; // क्विज़ शुरू करें, अगर प्रश्न नहीं हैं तो रुक जाएं
+        if (!initializeQuiz(originalQuestions)) return;
 
         auth.onAuthStateChanged(async (user) => {
           if (user) {
             const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
-            const doc = await progressRef.get();
-            let progressLoaded = false; // बदला गया: प्रोग्रेस लोड होने का फ्लैग
-            if (doc.exists) {
-                const firestoreData = doc.data();
-                // केवल तभी लोड करें जब कॉन्फ़िगरेशन मेल खाता हो
-                if (JSON.stringify(firestoreData.config) === JSON.stringify(quizConfig)) {
-                    console.log("Matching config found in Firestore. Loading progress...");
-                    answers = firestoreData.answers || {};
-                    bookmarkedQuestions = firestoreData.bookmarkedQuestions || [];
-                    questionTimes = firestoreData.questionTimes || {};
-                    current = firestoreData.currentQuestion || 0;
-                    // बदला गया: फायरबेस से फॉन्ट साइज लोड करें
-                    currentFontSize = firestoreData.fontSize || parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
-                    progressLoaded = true;
-                } else {
-                     console.log("Config mismatch. Starting fresh test.");
-                }
-            }
-            // बदला गया: यदि फायरबेस से लोड नहीं हुआ तो ही लोकल स्टोरेज से लें
-            if (!progressLoaded) {
-                currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+            try {
+              const doc = await progressRef.get();
+              if (doc.exists) {
+                  const firestoreData = doc.data();
+                  
+                  const storedConfigStr = getCanonicalConfigString(firestoreData.config);
+                  const currentConfigStr = getCanonicalConfigString(quizConfig);
+
+                  if (storedConfigStr === currentConfigStr) {
+                      console.log("Matching config found. Loading progress from Firestore...");
+                      answers = firestoreData.answers || {};
+                      bookmarkedQuestions = firestoreData.bookmarkedQuestions || [];
+                      questionTimes = firestoreData.questionTimes || {};
+                      current = firestoreData.currentQuestion || 0;
+                      currentFontSize = firestoreData.fontSize || 20;
+                  } else {
+                      console.log("Config mismatch. Starting fresh test.");
+                      answers = {};
+                      bookmarkedQuestions = [];
+                      questionTimes = {};
+                      current = 0;
+                      currentFontSize = 20;
+                      await saveProgressToFirestore(); 
+                  }
+              } else {
+                 console.log("No saved progress found in Firestore. Starting new test.");
+                 await saveProgressToFirestore();
+              }
+            } catch (error) {
+              console.error("Error loading progress from Firestore, starting fresh:", error);
+              answers = {};
+              bookmarkedQuestions = [];
+              questionTimes = {};
+              current = 0;
+              currentFontSize = 20;
             }
           } else {
-            // यूजर लॉग इन नहीं है तो लोकल स्टोरेज से लें
-             currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+            // लॉग-आउट यूजर के लिए लोकल स्टोरेज का उपयोग करें
+            console.log("User not logged in. Using local storage.");
+            const savedConfig = JSON.parse(localStorage.getItem(UNIT_ID + "_quizConfig"));
+            if (getCanonicalConfigString(savedConfig) === getCanonicalConfigString(quizConfig)) {
+                answers = JSON.parse(localStorage.getItem(UNIT_ID + "_quizAnswers")) || {};
+                bookmarkedQuestions = JSON.parse(localStorage.getItem(UNIT_ID + "_bookmarkedQuestions")) || [];
+                current = parseInt(localStorage.getItem(UNIT_ID + "_currentQuestion")) || 0;
+                currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
+            } else {
+                answers = {};
+                bookmarkedQuestions = [];
+                current = 0;
+                currentFontSize = 20;
+            }
           }
-          // बाकी का सेटअप
+          // क्विज़ UI को लोड और सेट करें
           applyFontSize();
           buildSidebarLinks();
           loadQuestion(current);
-          setInitialIcons();
           updateProgress();
           if(!isTestMode) updateScoreSummary();
         });
@@ -188,9 +219,8 @@
         if (index < 0 || index >= questions.length) return;
         
         if (currentQuestionStartTime !== null) stopTimer();
+        
         current = index;
-        localStorage.setItem(UNIT_ID + "_currentQuestion", current);
-        saveProgressToFirestore();
 
         const q = questions[current];
         const originalQuestionIndex = originalQuestions.indexOf(q);
@@ -198,17 +228,16 @@
         let html = `<div class='question' id='current-question-text'>Q${current + 1}. ${q.question}</div>`;
         
         q.options.forEach((opt, i) => {
-            const selected = answers[originalQuestionIndex] == i ? "checked" : "";
-            // टेस्ट मोड में जवाब देने के बाद भी रेडियो बटन डिसेबल नहीं होंगे
+            const isChecked = (answers[originalQuestionIndex] !== undefined && answers[originalQuestionIndex] == i);
+            const selected = isChecked ? "checked" : "";
             const disabled = (!isTestMode && answers[originalQuestionIndex] !== undefined) ? "disabled" : "";
-            html += `<label id='opt${i}'><input type='radio' name='q${originalQuestionIndex}' value='${i}' ${selected} ${disabled} onclick='selectAnswer(${originalQuestionIndex}, ${i})'> ${opt}</label>`;
+            html += `<label id='opt${i}' class='${isChecked && disabled ? (q.answer === i ? 'correct' : 'incorrect') : ''}'><input type='radio' name='q${originalQuestionIndex}' value='${i}' ${selected} ${disabled} onclick='selectAnswer(${originalQuestionIndex}, ${i})'> ${opt}</label>`;
         });
 
-        html += `<div class='correct-answer' id='correct' style='display: ${isTestMode ? 'none' : 'block'};'></div>`;
+        html += `<div class='correct-answer' id='correct' style='display: none;'></div>`;
         html += `<div class='explanation' id='explanation-text' style='display: none;'></div>`;
         document.getElementById("quiz-content").innerHTML = html;
 
-        // यदि उत्तर दिया गया है, तो उसे दिखाएं (केवल क्विज़ मोड में)
         if (!isTestMode && answers[originalQuestionIndex] !== undefined) {
             showInstantFeedback(originalQuestionIndex, answers[originalQuestionIndex]);
         }
@@ -223,35 +252,49 @@
 
     function selectAnswer(qOriginalIdx, selectedOptionIdx) {
         answers[qOriginalIdx] = selectedOptionIdx;
+        
+        // लोकल और फायरबेस दोनों में सहेजें
         localStorage.setItem(UNIT_ID + "_quizAnswers", JSON.stringify(answers));
+        localStorage.setItem(UNIT_ID + "_quizConfig", JSON.stringify(quizConfig));
         saveProgressToFirestore();
+
         updateSidebarHighlight();
         updateProgress();
 
         if (isTestMode) {
-            // टेस्ट मोड में, बस अगले प्रश्न पर जाएं
-            setTimeout(nextQuestion, 200);
+            setTimeout(() => {
+              if (current < questions.length - 1) {
+                nextQuestion();
+              } else {
+                 alert("यह अंतिम प्रश्न है। आप अब टेस्ट सबमिट कर सकते हैं।");
+              }
+            }, 200);
         } else {
-            // क्विज़ मोड में, तुरंत प्रतिक्रिया दिखाएं
             stopTimer();
             showInstantFeedback(qOriginalIdx, selectedOptionIdx);
             updateScoreSummary();
         }
     }
     
+    // ब्राउज़र बंद होने या टैब बंद होने से ठीक पहले डेटा सहेजें
+    window.addEventListener('beforeunload', function (e) {
+      if(auth.currentUser) {
+        stopTimer();
+        saveProgressToFirestore();
+      }
+    });
+
+    // बाकी सभी फंक्शन (submitQuiz, reviewQuiz, nextQuestion, prevQuestion, toggleSidebar, आदि) वैसे ही रहेंगे।
+    // यहाँ पर आपके बाकी सभी फंक्शन जैसे के तैसे रहेंगे...
     function showInstantFeedback(qOriginalIdx, selectedOptionIdx) {
         const q = originalQuestions[qOriginalIdx];
         const correctOptionIdx = q.answer;
-
         document.querySelectorAll(`input[name='q${qOriginalIdx}']`).forEach(radio => radio.disabled = true);
-        
-        if (selectedOptionIdx === correctOptionIdx) {
-            document.getElementById(`opt${selectedOptionIdx}`).classList.add("correct");
-        } else {
-            document.getElementById(`opt${selectedOptionIdx}`).classList.add("incorrect");
+        document.getElementById(`opt${selectedOptionIdx}`).classList.add(selectedOptionIdx === correctOptionIdx ? "correct" : "incorrect");
+        if (selectedOptionIdx !== correctOptionIdx) {
             document.getElementById(`opt${correctOptionIdx}`).classList.add("correct");
         }
-        
+        document.getElementById("correct").style.display = 'block';
         document.getElementById("correct").innerHTML = `<strong>सही उत्तर:</strong> ${q.options[correctOptionIdx]}`;
         const explanationDiv = document.getElementById("explanation-text");
         if (q.explanation) {
@@ -259,46 +302,41 @@
             explanationDiv.style.display = "block";
         }
     }
-
     function submitQuiz() {
         if (isTestMode) {
-            const unansweredCount = questions.length - Object.keys(answers).length;
-            if (unansweredCount > 0) {
-                if (!confirm(`आपने ${unansweredCount} प्रश्नों के उत्तर नहीं दिए हैं। क्या आप फिर भी सबमिट करना चाहते हैं?`)) {
+            const unansweredQuestions = questions.filter(q => answers[originalQuestions.indexOf(q)] === undefined);
+            if (unansweredQuestions.length > 0) {
+                if (!confirm(`आपने ${unansweredQuestions.length} प्रश्नों के उत्तर नहीं दिए हैं। क्या आप फिर भी सबमिट करना चाहते हैं?`)) {
                     return;
                 }
             }
         }
-
+        stopTimer();
         score = 0;
+        let answeredQuestionIndices = Object.keys(answers).map(Number);
         questions.forEach(q => {
             const originalIndex = originalQuestions.indexOf(q);
-            if (answers[originalIndex] !== undefined && answers[originalIndex] == q.answer) {
+            if (answeredQuestionIndices.includes(originalIndex) && answers[originalIndex] == q.answer) {
                 score++;
             }
         });
-
         const percentage = ((score / questions.length) * 100).toFixed(2);
         document.getElementById("result").innerHTML = `आपका अंतिम स्कोर: ${score}/${questions.length} (${percentage}%)`;
         document.getElementById("completion-message").style.display = 'block';
-
-        // सारे नेविगेशन और कंटेंट को छिपा दें
         document.getElementById('quiz-content').style.display = 'none';
         document.querySelector('.navigation').style.display = 'none';
         document.getElementById('time-tracking').style.display = 'none';
-        
-        reviewQuiz(); // समीक्षा दिखाएं
+        document.getElementById('bookmarkBtn').style.display = 'none';
+        document.getElementById('submitBtn').style.display = 'none';
+        reviewQuiz();
     }
-    
     function reviewQuiz() {
-        let reviewHTML = `<h2>परीक्षा की समीक्षा</h2>`;
+        let reviewHTML = `<h2>परीक्षा की समीक्षा</h2> <button onclick="window.location.href='courses.html'">दूसरे कोर्स पर जाएं</button>`;
         questions.forEach((q, index) => {
             const originalIndex = originalQuestions.indexOf(q);
             const userAnsIdx = answers[originalIndex];
-            
             reviewHTML += `<div class="question-review" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 8px;">`;
             reviewHTML += `<strong>Q${index + 1}: ${q.question}</strong><br>`;
-            
             q.options.forEach((opt, optIdx) => {
                 let style = '';
                 let label = '';
@@ -314,11 +352,9 @@
                 }
                 reviewHTML += `<div style="${style}">${String.fromCharCode(97 + optIdx)}) ${opt}${label}</div>`;
             });
-
             if (userAnsIdx === undefined) {
                  reviewHTML += `<div style="color: orange; margin-top: 5px;">आपने इस प्रश्न का उत्तर नहीं दिया।</div>`;
             }
-
             if (q.explanation) {
                 reviewHTML += `<div class="explanation-review" style="margin-top: 10px; padding: 8px; background: #f5f5f5; border-left: 3px solid #667eea;"><strong>व्याख्या:</strong> ${q.explanation}</div>`;
             }
@@ -327,30 +363,27 @@
         document.getElementById('quiz-content').innerHTML = reviewHTML;
         document.getElementById('quiz-content').style.display = 'block';
     }
-
-
-    // --- हेल्पर और UI फंक्शन ---
-
     function nextQuestion() {
-      if (current < questions.length - 1) loadQuestion(current + 1);
+      if (current < questions.length - 1) {
+        loadQuestion(current + 1);
+        localStorage.setItem(UNIT_ID + "_currentQuestion", current + 1);
+        saveProgressToFirestore();
+      }
     }
     function prevQuestion() {
-      if (current > 0) loadQuestion(current - 1);
+      if (current > 0) {
+        loadQuestion(current - 1);
+        localStorage.setItem(UNIT_ID + "_currentQuestion", current - 1);
+        saveProgressToFirestore();
+      }
     }
-
-
-   function toggleSidebar() {
+    function toggleSidebar() {
       const sidebar = document.getElementById("sidebar");
       const body = document.body;
       sidebar.classList.toggle("hidden");
       body.classList.toggle("sidebar-visible");
-      if (sidebar.classList.contains("hidden")) {
-        body.style.paddingLeft = "20px";
-      } else {
-        body.style.paddingLeft = body.clientWidth > 768 ? "240px" : "220px";
-      }
+      body.style.paddingLeft = !sidebar.classList.contains("hidden") ? (body.clientWidth > 768 ? "240px" : "220px") : "20px";
     }
-    
     function buildSidebarLinks() {
       const table = document.getElementById("questionTable");
       table.innerHTML = "";
@@ -368,40 +401,32 @@
         table.appendChild(row);
       }
     }
-    
     function updateSidebarHighlight() {
         document.querySelectorAll("#questionTable a").forEach((link, index) => {
-            link.className = ''; // रीसेट
+            link.className = '';
+            if (index >= questions.length) return;
             const q = questions[index];
             const originalIndex = originalQuestions.indexOf(q);
-
             if (answers[originalIndex] !== undefined) {
-                if (isTestMode) {
-                    link.classList.add('correct'); // टेस्ट मोड में हरा दिखाएं कि उत्तर दिया गया है
-                } else {
-                    link.classList.add(answers[originalIndex] == q.answer ? 'correct' : 'incorrect');
-                }
+                link.classList.add(isTestMode ? 'correct' : (answers[originalIndex] == q.answer ? 'correct' : 'incorrect'));
             } else {
                 link.classList.add('unanswered');
             }
-
             if (bookmarkedQuestions.includes(originalIndex)) {
                 link.classList.add('bookmarked');
             }
-            
             if (index === current) {
                 link.classList.add('active');
             }
         });
     }
-
     function toggleBookmark() {
         const q = questions[current];
         const originalIndex = originalQuestions.indexOf(q);
         const icon = document.getElementById('bookmarkBtn').querySelector('i');
-        
-        if (bookmarkedQuestions.includes(originalIndex)) {
-            bookmarkedQuestions = bookmarkedQuestions.filter(idx => idx !== originalIndex);
+        const pos = bookmarkedQuestions.indexOf(originalIndex);
+        if (pos > -1) {
+            bookmarkedQuestions.splice(pos, 1);
             icon.className = 'far fa-bookmark';
         } else {
             bookmarkedQuestions.push(originalIndex);
@@ -411,111 +436,93 @@
         saveProgressToFirestore();
         updateSidebarHighlight();
     }
-    
     function updateBookmarkButton() {
         const q = questions[current];
         const originalIndex = originalQuestions.indexOf(q);
         const icon = document.getElementById('bookmarkBtn').querySelector('i');
         icon.className = bookmarkedQuestions.includes(originalIndex) ? 'fas fa-bookmark' : 'far fa-bookmark';
     }
-    
-    // बाकी के फंक्शन जैसे हैं वैसे ही रहेंगे (clearSavedData, toggleTheme, etc.)
-    // ...
-    // यह सुनिश्चित करें कि आपके पास ये फंक्शन भी हों
     function updateProgress() {
       const total = questions.length;
-      const answeredCount = Object.keys(answers).filter(key => questions.some(q => originalQuestions.indexOf(q) == key)).length;
-      const percentage = total > 0 ? (answeredCount / total) * 100 : 0;
+      const answeredQuestionIndices = Object.keys(answers).map(Number);
+      const currentTestOriginalIndices = questions.map(q => originalQuestions.indexOf(q));
+      const answeredInCurrentTest = answeredQuestionIndices.filter(idx => currentTestOriginalIndices.includes(idx)).length;
+      const percentage = total > 0 ? (answeredInCurrentTest / total) * 100 : 0;
       document.getElementById("progressBarFill").style.width = percentage + "%";
-      document.getElementById("progressBarText").innerText = `${answeredCount}/${total} (${percentage.toFixed(0)}%)`;
+      document.getElementById("progressBarText").innerText = `${answeredInCurrentTest}/${total} (${percentage.toFixed(0)}%)`;
     }
     function updateScoreSummary() {
         let correct = 0, wrong = 0;
-        questions.forEach(q => {
-            const originalIndex = originalQuestions.indexOf(q);
-            if (answers[originalIndex] !== undefined) {
-                if (answers[originalIndex] == q.answer) correct++;
+        const answeredQuestionIndices = Object.keys(answers).map(Number);
+        const currentTestOriginalIndices = questions.map(q => originalQuestions.indexOf(q));
+        answeredQuestionIndices.forEach(originalIndex => {
+            if (currentTestOriginalIndices.includes(originalIndex)) {
+                const question = originalQuestions[originalIndex];
+                if (answers[originalIndex] == question.answer) correct++;
                 else wrong++;
             }
         });
         document.getElementById('score-summary').innerText = `सही उत्तर: ${correct} | गलत उत्तर: ${wrong}`;
     }
     function changeFontSize(change){
-        if (change === 0) {
-            currentFontSize = 20;
-        } else {
-            currentFontSize += change;
-        }
+        currentFontSize = (change === 0) ? 20 : (currentFontSize + change);
         if (currentFontSize < 14) currentFontSize = 14;
         if (currentFontSize > 32) currentFontSize = 32;
         localStorage.setItem(UNIT_ID + "_quizFontSize", currentFontSize);
-        saveProgressToFirestore(); // बदला गया: फॉन्ट साइज को सहेजने के लिए कॉल करें
+        if(auth.currentUser) saveProgressToFirestore();
         applyFontSize();
     }
     function applyFontSize(){
          const quizContent = document.getElementById('quiz-content');
-         if(quizContent) {
-            quizContent.style.fontSize = currentFontSize + 'px';
-         }
+         if(quizContent) quizContent.style.fontSize = currentFontSize + 'px';
     }
-    function toggleTheme(){/*...*/}
-    function toggleFullscreen(){/*...*/}
+    function toggleTheme(){}
+    function toggleFullscreen(){}
     function clearSavedData(){
-        if(confirm('Are you sure you want to clear all your saved progress for this test? This action cannot be undone.')) {
+        if(confirm('क्या आप वाकई इस परीक्षा के लिए अपनी सारी सहेजी गई प्रगति को साफ़ करना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।')) {
             localStorage.removeItem(UNIT_ID + "_quizAnswers");
             localStorage.removeItem(UNIT_ID + "_currentQuestion");
             localStorage.removeItem(UNIT_ID + "_bookmarkedQuestions");
             localStorage.removeItem(UNIT_ID + "_questionTimes");
-             const user = auth.currentUser;
-            if (user) {
-                const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
-                progressRef.delete().then(() => {
-                    console.log("Firestore progress cleared.");
-                    window.location.reload();
-                }).catch(error => {
-                    console.error("Error clearing Firestore progress: ", error);
-                });
+            localStorage.removeItem(UNIT_ID + "_quizConfig");
+            if(auth.currentUser) {
+                const progressRef = db.collection('users').doc(auth.currentUser.uid).collection('testProgress').doc(UNIT_ID);
+                progressRef.delete().then(() => { window.location.reload(); });
             } else {
                  window.location.reload();
             }
         }
-    }
-    function setInitialIcons(){/*...*/}
-    function stopTimer() {
-      if (timerInterval) clearInterval(timerInterval);
-      const q = questions[current];
-      if (!q) return;
-      const originalIndex = originalQuestions.indexOf(q);
-      const elapsed = Math.floor((Date.now() - (currentQuestionStartTime || Date.now())) / 1000);
-      questionTimes[originalIndex] = (questionTimes[originalIndex] || 0) + elapsed;
-      localStorage.setItem(UNIT_ID + "_questionTimes", JSON.stringify(questionTimes));
-      document.getElementById("time-tracking").innerText = `समय: ${questionTimes[originalIndex] || 0} सेकंड`;
-      saveProgressToFirestore();
     }
     function startTimer() {
       if (timerInterval) clearInterval(timerInterval);
       currentQuestionStartTime = Date.now();
       timerInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000);
-        document.getElementById("time-tracking").innerText = `समय: ${elapsed} सेकंड`;
+        const q = questions[current];
+        if (!q) return;
+        const originalIndex = originalQuestions.indexOf(q);
+        const totalTime = (questionTimes[originalIndex] || 0) + elapsed;
+        document.getElementById("time-tracking").innerText = `समय: ${totalTime} सेकंड`;
       }, 1000);
     }
-    
-    // ... आपके अन्य फंक्शन के बाद ...
-
-    // नया: साइडबार के बाहर क्लिक करने पर उसे बंद करने का लॉजिक
+    function stopTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      if (currentQuestionStartTime === null) return;
+      if (current >= questions.length || current < 0) return;
+      const q = questions[current];
+      if (!q) return;
+      const originalIndex = originalQuestions.indexOf(q);
+      const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000);
+      questionTimes[originalIndex] = (questionTimes[originalIndex] || 0) + elapsed;
+      localStorage.setItem(UNIT_ID + "_questionTimes", JSON.stringify(questionTimes));
+      currentQuestionStartTime = null;
+    }
     document.addEventListener('click', function(event) {
       const sidebar = document.getElementById('sidebar');
       const toggleBtn = document.querySelector('.toggle-btn');
-      
-      // जांचें कि साइडबार खुला है या नहीं
       if (!sidebar.classList.contains('hidden')) {
-        const isClickInsideSidebar = sidebar.contains(event.target);
-        const isClickOnToggleBtn = toggleBtn.contains(event.target);
-
-        // यदि क्लिक साइडबार और टॉगल बटन दोनों के बाहर हुआ है, तो साइडबार बंद करें
-        if (!isClickInsideSidebar && !isClickOnToggleBtn) {
-          toggleSidebar(); // मौजूदा फंक्शन को कॉल करें
+        if (!sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
+          toggleSidebar();
         }
       }
     });
