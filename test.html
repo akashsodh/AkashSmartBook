@@ -6,30 +6,34 @@
   <title>Raj. History, Arts & Culture</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css"> 
 </head>
 <body>
   <div class="toggle-btn" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
-  <div class="sidebar hidden" id="sidebar"> <div class="tools-section">
+  
+  <div class="sidebar hidden" id="sidebar"> 
+    <div class="tools-section">
         <h2>Tools</h2>
         <div class="font-size-controls">
+            <label for="fontSize" style="color:white; font-weight:bold;">Font:</label>
             <button onclick="changeFontSize(-2)">A-</button>
             <button onclick="changeFontSize(0)">A</button>
             <button onclick="changeFontSize(2)">A+</button>
         </div>
-        <button class="button theme-btn" onclick="toggleTheme()" id="theme-btn"><i class="fas fa-sun"></i> Toggle Theme</button>
         <button class="button fullscreen-btn" onclick="toggleFullscreen()" id="fullscreen-btn"><i class="fas fa-expand"></i> Fullscreen</button>
         <button class="button clear-data-btn" onclick="clearSavedData()">Clear Progress</button>
     </div>
     <h2>Questions</h2>
     <table id="questionTable"></table>
   </div>
+
   <div class="quiz-container">
     <div class="quiz-header-controls"> 
         <div class="top-navigation"> 
             <button id="submitBtn" onclick="submitQuiz()">Submit Test</button>
-            <button id="bookmarkBtn" onclick="toggleBookmark(current)">Bookmark <i class="far fa-bookmark"></i></button> 
+            <button id="reviewBtn" onclick="toggleReview()">Review <i class="far fa-star"></i></button>
+            <button id="bookmarkBtn" onclick="toggleBookmark()">Bookmark <i class="far fa-bookmark"></i></button> 
         </div>
         <div class="progress-bar-container"> 
             <div class="progress-bar-fill" id="progressBarFill"></div>
@@ -50,6 +54,13 @@
     <div id="completion-message" style="margin-top: 20px; text-align: center; font-size: 20px; font-weight: bold;"></div>
   </div>
 
+  <div class="mobile-bottom-nav">
+    <button onclick="prevQuestion()"><i class="fas fa-arrow-left"></i><span>पिछला</span></button>
+    <button onclick="toggleSidebar()"><i class="fas fa-list-ul"></i><span>प्रश्न सूची</span></button>
+    <button onclick="nextQuestion()"><span>अगला</span><i class="fas fa-arrow-right"></i></button>
+  </div>
+
+
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
@@ -60,10 +71,11 @@
     let originalQuestions = []; 
     let questions = []; 
     let bookmarkedQuestions = []; 
+    let markedForReview = []; // नया वेरिएबल
     let current = 0; 
     let score = 0;
     let answers = {}; 
-    const UNIT_ID = "unit901"; // यह आपके टेस्ट की यूनिक आईडी है
+    const UNIT_ID = "unit901";
 
     let isTestMode = false;
     let quizConfig = {};
@@ -84,50 +96,67 @@
       return JSON.stringify(sortedConfig);
     }
 
-    // फायरबेस में प्रगति सहेजने वाला फंक्शन
+    // डेली चैलेंज के लिए सीडेड रैंडम फंक्शन
+    function seededRandom(seed) {
+        let state = seed % 2147483647;
+        if (state <= 0) state += 2147483646;
+        return () => {
+            state = (state * 16807) % 2147483647;
+            return (state - 1) / 2147483646;
+        };
+    }
+
+    // फायरबेस में प्रगति सहेजने वाला फंक्शन (संशोधित)
     async function saveProgressToFirestore() {
       const user = auth.currentUser;
-      if (!user) return; // अगर यूजर लॉग-इन नहीं है तो कुछ न करें
+      if (!user) return;
       const progressRef = db.collection('users').doc(user.uid).collection('testProgress').doc(UNIT_ID);
       const progressData = {
         answers: answers,
         currentQuestion: current,
         bookmarkedQuestions: bookmarkedQuestions,
+        markedForReview: markedForReview, // नया डेटा
         questionTimes: questionTimes,
         config: quizConfig, 
         fontSize: currentFontSize,
         lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
       };
       try {
-        await progressRef.set(progressData);
+        await progressRef.set(progressData, { merge: true });
       } catch (error) {
         console.error("Error saving progress to Firestore: ", error);
       }
     }
 
-    // क्विज़ को शुरू करने वाला फंक्शन
+    // क्विज़ को शुरू करने वाला फंक्शन (संशोधित)
     function initializeQuiz(allQuestions) {
         const urlParams = new URLSearchParams(window.location.search);
         quizConfig = {
             mode: urlParams.get('mode') || 'quiz',
             count: parseInt(urlParams.get('count')) || 10,
             type: urlParams.get('type') || 'sequential',
-            category: decodeURIComponent(urlParams.get('category') || 'all')
+            category: decodeURIComponent(urlParams.get('category') || 'all'),
+            seed: urlParams.get('seed') // डेली चैलेंज के लिए
         };
         
         isTestMode = quizConfig.mode === 'test';
         document.getElementById('submitBtn').style.display = isTestMode ? 'inline-block' : 'none';
         document.getElementById('score-summary').style.display = isTestMode ? 'none' : 'block';
 
-        let filteredQuestions = allQuestions;
-        if (quizConfig.category !== 'all') {
-            filteredQuestions = allQuestions.filter(q => q.category === quizConfig.category);
-        }
+        let filteredQuestions;
 
-        if (quizConfig.type === 'random') {
-            for (let i = filteredQuestions.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [filteredQuestions[i], filteredQuestions[j]] = [filteredQuestions[j], filteredQuestions[i]];
+        if (quizConfig.type === 'daily_challenge') {
+            const dateSeed = new Date(quizConfig.seed).getTime();
+            const random = seededRandom(dateSeed);
+            let shuffled = [...allQuestions].sort(() => random() - 0.5);
+            filteredQuestions = shuffled;
+        } else {
+            filteredQuestions = allQuestions;
+            if (quizConfig.category !== 'all') {
+                filteredQuestions = allQuestions.filter(q => q.category === quizConfig.category);
+            }
+            if (quizConfig.type === 'random') {
+                filteredQuestions.sort(() => Math.random() - 0.5);
             }
         }
 
@@ -155,55 +184,40 @@
               const doc = await progressRef.get();
               if (doc.exists) {
                   const firestoreData = doc.data();
-                  
                   const storedConfigStr = getCanonicalConfigString(firestoreData.config);
                   const currentConfigStr = getCanonicalConfigString(quizConfig);
 
                   if (storedConfigStr === currentConfigStr) {
-                      console.log("Matching config found. Loading progress from Firestore...");
                       answers = firestoreData.answers || {};
                       bookmarkedQuestions = firestoreData.bookmarkedQuestions || [];
+                      markedForReview = firestoreData.markedForReview || [];
                       questionTimes = firestoreData.questionTimes || {};
                       current = firestoreData.currentQuestion || 0;
                       currentFontSize = firestoreData.fontSize || 20;
                   } else {
-                      console.log("Config mismatch. Starting fresh test.");
-                      answers = {};
-                      bookmarkedQuestions = [];
-                      questionTimes = {};
-                      current = 0;
-                      currentFontSize = 20;
+                      answers = {}; bookmarkedQuestions = []; markedForReview = []; questionTimes = {}; current = 0; currentFontSize = 20;
                       await saveProgressToFirestore(); 
                   }
               } else {
-                 console.log("No saved progress found in Firestore. Starting new test.");
                  await saveProgressToFirestore();
               }
             } catch (error) {
               console.error("Error loading progress from Firestore, starting fresh:", error);
-              answers = {};
-              bookmarkedQuestions = [];
-              questionTimes = {};
-              current = 0;
-              currentFontSize = 20;
+              answers = {}; bookmarkedQuestions = []; markedForReview = []; questionTimes = {}; current = 0; currentFontSize = 20;
             }
           } else {
             // लॉग-आउट यूजर के लिए लोकल स्टोरेज का उपयोग करें
-            console.log("User not logged in. Using local storage.");
             const savedConfig = JSON.parse(localStorage.getItem(UNIT_ID + "_quizConfig"));
             if (getCanonicalConfigString(savedConfig) === getCanonicalConfigString(quizConfig)) {
                 answers = JSON.parse(localStorage.getItem(UNIT_ID + "_quizAnswers")) || {};
                 bookmarkedQuestions = JSON.parse(localStorage.getItem(UNIT_ID + "_bookmarkedQuestions")) || [];
+                markedForReview = JSON.parse(localStorage.getItem(UNIT_ID + "_markedForReview")) || [];
                 current = parseInt(localStorage.getItem(UNIT_ID + "_currentQuestion")) || 0;
                 currentFontSize = parseFloat(localStorage.getItem(UNIT_ID + "_quizFontSize")) || 20;
             } else {
-                answers = {};
-                bookmarkedQuestions = [];
-                current = 0;
-                currentFontSize = 20;
+                answers = {}; bookmarkedQuestions = []; markedForReview = []; current = 0; currentFontSize = 20;
             }
           }
-          // क्विज़ UI को लोड और सेट करें
           applyFontSize();
           buildSidebarLinks();
           loadQuestion(current);
@@ -248,12 +262,11 @@
         startTimer();
         document.getElementById("time-tracking").innerText = `समय: ${questionTimes[originalQuestionIndex] || 0} सेकंड`;
         updateBookmarkButton();
+        updateReviewButton();
     }
 
     function selectAnswer(qOriginalIdx, selectedOptionIdx) {
         answers[qOriginalIdx] = selectedOptionIdx;
-        
-        // लोकल और फायरबेस दोनों में सहेजें
         localStorage.setItem(UNIT_ID + "_quizAnswers", JSON.stringify(answers));
         localStorage.setItem(UNIT_ID + "_quizConfig", JSON.stringify(quizConfig));
         saveProgressToFirestore();
@@ -263,11 +276,8 @@
 
         if (isTestMode) {
             setTimeout(() => {
-              if (current < questions.length - 1) {
-                nextQuestion();
-              } else {
-                 alert("यह अंतिम प्रश्न है। आप अब टेस्ट सबमिट कर सकते हैं।");
-              }
+              if (current < questions.length - 1) nextQuestion();
+              else alert("यह अंतिम प्रश्न है। आप अब टेस्ट सबमिट कर सकते हैं।");
             }, 200);
         } else {
             stopTimer();
@@ -276,7 +286,6 @@
         }
     }
     
-    // ब्राउज़र बंद होने या टैब बंद होने से ठीक पहले डेटा सहेजें
     window.addEventListener('beforeunload', function (e) {
       if(auth.currentUser) {
         stopTimer();
@@ -284,8 +293,6 @@
       }
     });
 
-    // बाकी सभी फंक्शन (submitQuiz, reviewQuiz, nextQuestion, prevQuestion, toggleSidebar, आदि) वैसे ही रहेंगे।
-    // यहाँ पर आपके बाकी सभी फंक्शन जैसे के तैसे रहेंगे...
     function showInstantFeedback(qOriginalIdx, selectedOptionIdx) {
         const q = originalQuestions[qOriginalIdx];
         const correctOptionIdx = q.answer;
@@ -302,7 +309,8 @@
             explanationDiv.style.display = "block";
         }
     }
-    function submitQuiz() {
+
+    async function submitQuiz() {
         if (isTestMode) {
             const unansweredQuestions = questions.filter(q => answers[originalQuestions.indexOf(q)] === undefined);
             if (unansweredQuestions.length > 0) {
@@ -320,16 +328,50 @@
                 score++;
             }
         });
+        
+        const user = auth.currentUser;
+        if (user) {
+            const userRef = db.collection('users').doc(user.uid);
+            const pointsToAdd = score * 10;
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const userDoc = await transaction.get(userRef);
+                    if (!userDoc.exists) {
+                        transaction.set(userRef, { points: pointsToAdd, badges: ['first_test'] });
+                        alert("बधाई! आपको 'प्रथम प्रयास' बैज मिला है!");
+                    } else {
+                        const oldPoints = userDoc.data().points || 0;
+                        const newPoints = oldPoints + pointsToAdd;
+                        let badges = userDoc.data().badges || [];
+                        if (!badges.includes('first_test')) {
+                            badges.push('first_test');
+                            alert("बधाई! आपको 'प्रथम प्रयास' बैज मिला है!");
+                        }
+                        if (score === questions.length && score > 0 && !badges.includes('perfect_score')) {
+                            badges.push('perfect_score');
+                            alert("शानदार! आपको 'परफेक्ट स्कोर' बैज मिला है!");
+                        }
+                        transaction.update(userRef, { points: newPoints, badges: badges });
+                    }
+                });
+            } catch (e) {
+                console.error("Transaction failed: ", e);
+            }
+        }
+        
         const percentage = ((score / questions.length) * 100).toFixed(2);
         document.getElementById("result").innerHTML = `आपका अंतिम स्कोर: ${score}/${questions.length} (${percentage}%)`;
         document.getElementById("completion-message").style.display = 'block';
         document.getElementById('quiz-content').style.display = 'none';
         document.querySelector('.navigation').style.display = 'none';
+        document.querySelector('.mobile-bottom-nav').style.display = 'none';
         document.getElementById('time-tracking').style.display = 'none';
         document.getElementById('bookmarkBtn').style.display = 'none';
+        document.getElementById('reviewBtn').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'none';
         reviewQuiz();
     }
+    
     function reviewQuiz() {
         let reviewHTML = `<h2>परीक्षा की समीक्षा</h2> <button onclick="window.location.href='courses.html'">दूसरे कोर्स पर जाएं</button>`;
         questions.forEach((q, index) => {
@@ -363,6 +405,7 @@
         document.getElementById('quiz-content').innerHTML = reviewHTML;
         document.getElementById('quiz-content').style.display = 'block';
     }
+
     function nextQuestion() {
       if (current < questions.length - 1) {
         loadQuestion(current + 1);
@@ -370,6 +413,7 @@
         saveProgressToFirestore();
       }
     }
+
     function prevQuestion() {
       if (current > 0) {
         loadQuestion(current - 1);
@@ -377,13 +421,15 @@
         saveProgressToFirestore();
       }
     }
+
     function toggleSidebar() {
       const sidebar = document.getElementById("sidebar");
       const body = document.body;
       sidebar.classList.toggle("hidden");
       body.classList.toggle("sidebar-visible");
-      body.style.paddingLeft = !sidebar.classList.contains("hidden") ? (body.clientWidth > 768 ? "240px" : "220px") : "20px";
+      body.style.paddingLeft = !sidebar.classList.contains("hidden") ? (window.innerWidth > 768 ? "240px" : "220px") : "0px";
     }
+
     function buildSidebarLinks() {
       const table = document.getElementById("questionTable");
       table.innerHTML = "";
@@ -401,16 +447,22 @@
         table.appendChild(row);
       }
     }
+
     function updateSidebarHighlight() {
         document.querySelectorAll("#questionTable a").forEach((link, index) => {
             link.className = '';
             if (index >= questions.length) return;
             const q = questions[index];
             const originalIndex = originalQuestions.indexOf(q);
+
             if (answers[originalIndex] !== undefined) {
-                link.classList.add(isTestMode ? 'correct' : (answers[originalIndex] == q.answer ? 'correct' : 'incorrect'));
+                link.classList.add(isTestMode ? 'answered' : (answers[originalIndex] == q.answer ? 'correct' : 'incorrect'));
             } else {
                 link.classList.add('unanswered');
+            }
+            
+            if (markedForReview.includes(originalIndex)) {
+                link.classList.add('marked-for-review');
             }
             if (bookmarkedQuestions.includes(originalIndex)) {
                 link.classList.add('bookmarked');
@@ -420,28 +472,51 @@
             }
         });
     }
+
     function toggleBookmark() {
         const q = questions[current];
         const originalIndex = originalQuestions.indexOf(q);
-        const icon = document.getElementById('bookmarkBtn').querySelector('i');
         const pos = bookmarkedQuestions.indexOf(originalIndex);
         if (pos > -1) {
             bookmarkedQuestions.splice(pos, 1);
-            icon.className = 'far fa-bookmark';
         } else {
             bookmarkedQuestions.push(originalIndex);
-            icon.className = 'fas fa-bookmark';
         }
         localStorage.setItem(UNIT_ID + "_bookmarkedQuestions", JSON.stringify(bookmarkedQuestions));
         saveProgressToFirestore();
         updateSidebarHighlight();
+        updateBookmarkButton();
     }
+    
     function updateBookmarkButton() {
         const q = questions[current];
         const originalIndex = originalQuestions.indexOf(q);
         const icon = document.getElementById('bookmarkBtn').querySelector('i');
         icon.className = bookmarkedQuestions.includes(originalIndex) ? 'fas fa-bookmark' : 'far fa-bookmark';
     }
+
+    function toggleReview() {
+        const q = questions[current];
+        const originalIndex = originalQuestions.indexOf(q);
+        const pos = markedForReview.indexOf(originalIndex);
+        if (pos > -1) {
+            markedForReview.splice(pos, 1);
+        } else {
+            markedForReview.push(originalIndex);
+        }
+        localStorage.setItem(UNIT_ID + "_markedForReview", JSON.stringify(markedForReview));
+        saveProgressToFirestore();
+        updateSidebarHighlight();
+        updateReviewButton();
+    }
+
+    function updateReviewButton() {
+        const q = questions[current];
+        const originalIndex = originalQuestions.indexOf(q);
+        const icon = document.getElementById('reviewBtn').querySelector('i');
+        icon.className = markedForReview.includes(originalIndex) ? 'fas fa-star' : 'far fa-star';
+    }
+
     function updateProgress() {
       const total = questions.length;
       const answeredQuestionIndices = Object.keys(answers).map(Number);
@@ -451,6 +526,7 @@
       document.getElementById("progressBarFill").style.width = percentage + "%";
       document.getElementById("progressBarText").innerText = `${answeredInCurrentTest}/${total} (${percentage.toFixed(0)}%)`;
     }
+
     function updateScoreSummary() {
         let correct = 0, wrong = 0;
         const answeredQuestionIndices = Object.keys(answers).map(Number);
@@ -464,6 +540,7 @@
         });
         document.getElementById('score-summary').innerText = `सही उत्तर: ${correct} | गलत उत्तर: ${wrong}`;
     }
+
     function changeFontSize(change){
         currentFontSize = (change === 0) ? 20 : (currentFontSize + change);
         if (currentFontSize < 14) currentFontSize = 14;
@@ -472,17 +549,28 @@
         if(auth.currentUser) saveProgressToFirestore();
         applyFontSize();
     }
+
     function applyFontSize(){
          const quizContent = document.getElementById('quiz-content');
          if(quizContent) quizContent.style.fontSize = currentFontSize + 'px';
     }
-    function toggleTheme(){}
-    function toggleFullscreen(){}
+    
+    function toggleFullscreen(){
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) {
+            document.exitFullscreen();
+            }
+        }
+    }
+
     function clearSavedData(){
         if(confirm('क्या आप वाकई इस परीक्षा के लिए अपनी सारी सहेजी गई प्रगति को साफ़ करना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।')) {
             localStorage.removeItem(UNIT_ID + "_quizAnswers");
             localStorage.removeItem(UNIT_ID + "_currentQuestion");
             localStorage.removeItem(UNIT_ID + "_bookmarkedQuestions");
+            localStorage.removeItem(UNIT_ID + "_markedForReview");
             localStorage.removeItem(UNIT_ID + "_questionTimes");
             localStorage.removeItem(UNIT_ID + "_quizConfig");
             if(auth.currentUser) {
@@ -493,6 +581,7 @@
             }
         }
     }
+
     function startTimer() {
       if (timerInterval) clearInterval(timerInterval);
       currentQuestionStartTime = Date.now();
@@ -505,10 +594,10 @@
         document.getElementById("time-tracking").innerText = `समय: ${totalTime} सेकंड`;
       }, 1000);
     }
+
     function stopTimer() {
       if (timerInterval) clearInterval(timerInterval);
-      if (currentQuestionStartTime === null) return;
-      if (current >= questions.length || current < 0) return;
+      if (currentQuestionStartTime === null || current >= questions.length || current < 0) return;
       const q = questions[current];
       if (!q) return;
       const originalIndex = originalQuestions.indexOf(q);
@@ -517,6 +606,7 @@
       localStorage.setItem(UNIT_ID + "_questionTimes", JSON.stringify(questionTimes));
       currentQuestionStartTime = null;
     }
+
     document.addEventListener('click', function(event) {
       const sidebar = document.getElementById('sidebar');
       const toggleBtn = document.querySelector('.toggle-btn');
@@ -526,6 +616,7 @@
         }
       }
     });
+
     window.onload = loadQuestions;
   </script>
 </body>

@@ -1,23 +1,22 @@
-// sw.js का सही कोड
+// sw.js का संशोधित कोड
 
-const CACHE_NAME = 'mock-test-v8'; // वर्जन को v2 से v3 कर दिया गया है
+const CACHE_NAME = 'mock-test-v9'; // वर्जन बदलें (जैसे v8 से v9)
 
-// कैश करने के लिए आवश्यक फाइलें
 const urlsToCache = [
   '/',
   'index.html',
   'courses.html',
-  'test.html',      // <-- यह महत्वपूर्ण लाइन जोड़ी गई है
+  'test.html',      
   'style.css',
   'script.js',
   'questions.json',
-  '/icons/icon-192.png', // आइकन को भी कैश कर लेते हैं
-  '/icons/icon-512.png', // आइकन को भी कैश कर लेते हैं
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
-// इंस्टॉल इवेंट: जब सर्विस वर्कर इंस्टॉल होता है
+// इंस्टॉल इवेंट
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -28,16 +27,21 @@ self.addEventListener('install', event => {
   );
 });
 
-// फेच इवेंट: जब भी कोई रिसोर्स (जैसे पेज, इमेज) फेच होता है
+// फेच इवेंट (नेटवर्क फॉलबैक के साथ कैश-फर्स्ट रणनीति)
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // अगर कैश में मिलता है, तो वहां से रिटर्न करो, वरना नेटवर्क से फेच करो
-        return response || fetch(event.request);
+        // अगर कैश में है तो रिटर्न करें
+        if (response) {
+          return response;
+        }
+        // वर्ना नेटवर्क से फेच करें
+        return fetch(event.request);
       })
   );
 });
+
 
 // एक्टिवेट इवेंट: पुराने कैश को हटाने के लिए
 self.addEventListener('activate', event => {
@@ -47,6 +51,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
